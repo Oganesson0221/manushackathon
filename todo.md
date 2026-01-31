@@ -67,3 +67,11 @@
 - [x] Dynamic speaker order based on joined participants (skip empty positions)
 
 - [x] Redesign frontend to match competitor's visual style (color scheme, layout, decorations)
+
+## Bug Fixes
+
+- [ ] Fix real-time transcript syncing - broadcast to all users in room
+- [ ] Add transcript re-hydration on client join/reconnect
+- [ ] Delay microphone recording until AI speech completes (prevent AI voice in transcript)
+
+- [x] Fix audio recording cutting off after first few seconds - ensure continuous recording and transcription

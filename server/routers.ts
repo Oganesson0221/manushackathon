@@ -484,9 +484,14 @@ Respond with a JSON object containing:
           };
         }
         
-        // Append to existing transcript
+        // Get speech to find room ID and speaker info
         const speech = await db.getSpeechById(input.speechId);
-        const existingTranscript = speech?.transcript || '';
+        if (!speech) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Speech not found" });
+        }
+        
+        // Append to existing transcript
+        const existingTranscript = speech.transcript || '';
         const newTranscript = existingTranscript 
           ? `${existingTranscript} ${result.text}` 
           : result.text;
@@ -496,10 +501,53 @@ Respond with a JSON object containing:
           audioUrl,
         });
         
+        // Save transcript segment to DB for real-time sync
+        const latestSeq = await db.getLatestTranscriptSequence(speech.roomId);
+        await db.createTranscriptSegment({
+          roomId: speech.roomId,
+          speechId: input.speechId,
+          speakerRole: speech.speakerRole,
+          speakerName: null, // Will be filled by client
+          text: result.text,
+          timestamp: input.timestamp || 0,
+          sequenceNumber: latestSeq + 1,
+        });
+        
         return { 
           transcript: result.text,
           segments: result.segments,
+          sequenceNumber: latestSeq + 1,
         };
+      }),
+  }),
+
+  // Live transcript polling for real-time sync
+  transcript: router({
+    // Get all transcript segments for a room (for initial load / rehydration)
+    getAll: protectedProcedure
+      .input(z.object({ roomId: z.number() }))
+      .query(async ({ input }) => {
+        const segments = await db.getRoomTranscriptSegments(input.roomId);
+        return { segments };
+      }),
+    
+    // Poll for new segments since a given sequence number
+    poll: protectedProcedure
+      .input(z.object({ 
+        roomId: z.number(),
+        afterSequence: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const segments = await db.getRoomTranscriptSegments(input.roomId, input.afterSequence);
+        return { segments };
+      }),
+    
+    // Get the latest sequence number (for checking if there are updates)
+    getLatestSequence: protectedProcedure
+      .input(z.object({ roomId: z.number() }))
+      .query(async ({ input }) => {
+        const sequence = await db.getLatestTranscriptSequence(input.roomId);
+        return { sequence };
       }),
   }),
 
