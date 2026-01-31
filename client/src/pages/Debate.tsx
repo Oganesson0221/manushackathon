@@ -70,9 +70,12 @@ export default function Debate() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioChunksRef = useRef<Blob[]>([]); // All accumulated audio chunks
+  const pendingChunksRef = useRef<Blob[]>([]); // Chunks waiting to be transcribed
+  const processedIndexRef = useRef(0); // Index of last processed chunk
   const streamRef = useRef<MediaStream | null>(null);
-  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null); // Separate ref for cleanup
+  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingRef = useRef(false); // Prevent concurrent transcription calls
   
   // Transcript state - now synced from server
   const [liveTranscript, setLiveTranscript] = useState<Array<{
@@ -331,34 +334,47 @@ export default function Debate() {
     };
   }, []);
 
-  // Process audio and transcribe - uses refs for stable closure in intervals
-  const processAudioChunk = useCallback(async () => {
+  // Process audio and transcribe - queue-based approach that never loses data
+  const processAudioChunk = useCallback(async (isFinal: boolean = false) => {
     const speechId = currentSpeechIdRef.current;
-    if (audioChunksRef.current.length === 0 || !speechId) {
-      console.log("[Transcription] Skipping - no chunks or no speechId", { chunks: audioChunksRef.current.length, speechId });
+    
+    // Check if we have new chunks to process
+    const totalChunks = audioChunksRef.current.length;
+    const processedCount = processedIndexRef.current;
+    
+    if (totalChunks <= processedCount || !speechId) {
+      console.log("[Transcription] Skipping - no new chunks", { total: totalChunks, processed: processedCount, speechId });
       return;
     }
     
-    // Don't process if AI is speaking (to avoid recording AI voice)
-    if (isSpeakingRef.current) {
-      console.log("[Transcription] Skipping - AI is speaking, discarding audio");
-      audioChunksRef.current = []; // Discard audio recorded during AI speech
+    // Don't process if AI is speaking (unless final)
+    if (isSpeakingRef.current && !isFinal) {
+      console.log("[Transcription] Skipping - AI is speaking");
       return;
     }
     
-    // Take current chunks and clear for next batch
-    const chunksToProcess = [...audioChunksRef.current];
-    audioChunksRef.current = [];
+    // Prevent concurrent processing
+    if (isProcessingRef.current && !isFinal) {
+      console.log("[Transcription] Skipping - already processing");
+      return;
+    }
+    
+    isProcessingRef.current = true;
+    
+    // Get unprocessed chunks (don't clear them, just mark as processed)
+    const chunksToProcess = audioChunksRef.current.slice(processedCount);
+    const newProcessedIndex = totalChunks;
     
     const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
     
     // Only process if blob is large enough (has actual audio)
-    if (audioBlob.size < 1000) {
+    if (audioBlob.size < 500) {
       console.log("[Transcription] Skipping - blob too small:", audioBlob.size);
+      isProcessingRef.current = false;
       return;
     }
     
-    console.log("[Transcription] Processing audio chunk:", audioBlob.size, "bytes");
+    console.log("[Transcription] Processing", chunksToProcess.length, "chunks,", audioBlob.size, "bytes", isFinal ? "(FINAL)" : "");
     setIsTranscribing(true);
     
     try {
@@ -385,21 +401,24 @@ export default function Debate() {
       
       console.log("[Transcription] Sending to server, timestamp:", timestamp);
       
-      // Send to backend for transcription (server will save to DB and broadcast)
+      // Send to backend for transcription
       await transcribeSpeech.mutateAsync({
         speechId,
         audioData: base64Audio,
         timestamp,
       });
       
-      console.log("[Transcription] Successfully transcribed");
-      // Transcript will be updated via polling, no need to update local state here
+      // Only mark as processed AFTER successful transcription
+      processedIndexRef.current = newProcessedIndex;
+      console.log("[Transcription] Successfully transcribed, processed index now:", newProcessedIndex);
     } catch (err) {
       console.error("[Transcription] Error:", err);
+      // Don't update processedIndex on error - will retry these chunks
     } finally {
       setIsTranscribing(false);
+      isProcessingRef.current = false;
     }
-  }, [currentSpeaker, transcribeSpeech]); // Removed dependencies that caused stale closures
+  }, [currentSpeaker, transcribeSpeech]);
 
   const startSpeech = useCallback(async () => {
     if (!roomData?.room.id || !currentSpeaker) return;
@@ -419,6 +438,11 @@ export default function Debate() {
       // Initialize time ref
       timeRemainingRef.current = currentSpeaker.time;
       
+      // Reset audio tracking refs
+      audioChunksRef.current = [];
+      processedIndexRef.current = 0;
+      isProcessingRef.current = false;
+      
       // Start timer
       setIsTimerRunning(true);
       
@@ -431,7 +455,7 @@ export default function Debate() {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            sampleRate: 16000,
+            autoGainControl: true,
           } 
         });
         streamRef.current = stream;
@@ -439,52 +463,57 @@ export default function Debate() {
         // Check for supported mime type
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
           ? 'audio/webm;codecs=opus' 
-          : 'audio/webm';
+          : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : 'audio/mp4';
         
-        const mediaRecorder = new MediaRecorder(stream, { mimeType });
+        console.log("[Recording] Using mime type:", mimeType);
+        
+        const mediaRecorder = new MediaRecorder(stream, { 
+          mimeType,
+          audioBitsPerSecond: 128000 // Good quality for speech
+        });
         mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
         
         mediaRecorder.ondataavailable = (event) => {
-          console.log("[Recording] Data available:", event.data.size, "bytes");
+          console.log("[Recording] Data available:", event.data.size, "bytes, state:", mediaRecorder.state);
           if (event.data.size > 0) {
-            // Only collect audio if AI is not speaking
-            if (!isSpeakingRef.current) {
-              audioChunksRef.current.push(event.data);
-              console.log("[Recording] Chunk added, total chunks:", audioChunksRef.current.length);
-            } else {
-              console.log("[Recording] Discarding chunk - AI speaking");
-            }
+            // Always collect audio - we'll filter AI speech during transcription
+            audioChunksRef.current.push(event.data);
+            console.log("[Recording] Chunk added, total chunks:", audioChunksRef.current.length);
           }
         };
         
         mediaRecorder.onerror = (event) => {
           console.error("[Recording] MediaRecorder error:", event);
+          toast.error("Recording error occurred");
         };
         
         mediaRecorder.onstop = () => {
-          console.log("[Recording] MediaRecorder stopped");
+          console.log("[Recording] MediaRecorder stopped, total chunks:", audioChunksRef.current.length);
         };
         
-        // Start recording with timeslice - this fires ondataavailable every 5 seconds
-        mediaRecorder.start(5000);
-        console.log("[Recording] Started with 5s timeslice");
+        // Start recording with shorter timeslice for more frequent data
+        // Using 3 seconds to get more responsive transcription
+        mediaRecorder.start(3000);
+        console.log("[Recording] Started with 3s timeslice");
         setIsRecording(true);
         setIsMicActive(true);
         
-        // Set up interval to process chunks - slightly offset from recording timeslice
-        // to ensure chunks are available when we process
+        // Set up interval to process chunks every 10 seconds
+        // This batches multiple 3s chunks together for more efficient transcription
         transcriptionIntervalRef.current = setInterval(() => {
-          console.log("[Recording] Interval tick, chunks:", audioChunksRef.current.length, "AI speaking:", isSpeakingRef.current);
-          if (audioChunksRef.current.length > 0 && !isSpeakingRef.current) {
-            processAudioChunk();
+          const unprocessedCount = audioChunksRef.current.length - processedIndexRef.current;
+          console.log("[Recording] Interval tick, unprocessed chunks:", unprocessedCount, "AI speaking:", isSpeakingRef.current);
+          if (unprocessedCount > 0 && !isSpeakingRef.current && !isProcessingRef.current) {
+            processAudioChunk(false);
           }
-        }, 6000); // 6 seconds to ensure we have data from the 5s timeslice
+        }, 10000); // Process every 10 seconds
         
-        toast.success("Recording started");
+        toast.success("Recording started - speak clearly into your microphone");
       } catch (err) {
         console.error("Failed to start recording:", err);
-        toast.error("Could not access microphone. Timer will still run.");
+        toast.error("Could not access microphone. Please check permissions.");
       }
     } catch (err) {
       toast.error("Failed to start speech");
@@ -493,6 +522,8 @@ export default function Debate() {
 
   const stopSpeech = useCallback(async () => {
     console.log("[Recording] Stopping speech...");
+    console.log("[Recording] Total chunks collected:", audioChunksRef.current.length);
+    console.log("[Recording] Processed so far:", processedIndexRef.current);
     
     // Stop timer
     setIsTimerRunning(false);
@@ -507,22 +538,30 @@ export default function Debate() {
       transcriptionIntervalRef.current = null;
     }
     
-    // Stop recording and process final chunk
+    // Stop recording and process ALL remaining audio
     if (mediaRecorderRef.current && isRecording) {
       // Request final data before stopping
       if (mediaRecorderRef.current.state === 'recording') {
+        console.log("[Recording] Requesting final data...");
         mediaRecorderRef.current.requestData(); // Force emit any pending data
       }
       
       mediaRecorderRef.current.stop();
       
-      // Small delay to ensure ondataavailable fires for the final chunk
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for ondataavailable to fire with final chunk
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Process any remaining audio (only if AI is not speaking)
-      if (audioChunksRef.current.length > 0 && !isSpeakingRef.current) {
-        console.log("[Recording] Processing final chunks:", audioChunksRef.current.length);
-        await processAudioChunk();
+      console.log("[Recording] After stop - total chunks:", audioChunksRef.current.length);
+      
+      // Process ALL remaining unprocessed audio (force final processing)
+      const unprocessedCount = audioChunksRef.current.length - processedIndexRef.current;
+      if (unprocessedCount > 0) {
+        console.log("[Recording] Processing final", unprocessedCount, "unprocessed chunks");
+        // Wait for any in-progress transcription to complete
+        while (isProcessingRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        await processAudioChunk(true); // Pass true for final processing
       }
       
       if (streamRef.current) {
@@ -538,12 +577,16 @@ export default function Debate() {
     const speechId = currentSpeechIdRef.current;
     if (speechId && currentSpeaker) {
       const duration = currentSpeaker.time - timeRemainingRef.current;
-      console.log("[Recording] Ending speech, duration:", duration);
+      console.log("[Recording] Ending speech, duration:", duration, "seconds");
       await endSpeech.mutateAsync({
         speechId,
         duration,
       });
     }
+    
+    // Clear audio refs
+    audioChunksRef.current = [];
+    processedIndexRef.current = 0;
     
     speakAnnouncement("Thank you. Moving to the next speaker.");
     

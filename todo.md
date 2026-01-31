@@ -75,3 +75,5 @@
 - [ ] Delay microphone recording until AI speech completes (prevent AI voice in transcript)
 
 - [x] Fix audio recording cutting off after first few seconds - ensure continuous recording and transcription
+
+- [x] Fix audio recording cutting off - ensure entire speech is recorded and transcribed until stop button pressed
