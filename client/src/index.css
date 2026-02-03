@@ -1,3 +1,6 @@
+/* Google Fonts - Inter (must be at the top before other @import statements) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -392,6 +395,3 @@
 .speaking-indicator span:nth-child(4) {
   animation-delay: 0.3s;
 }
-
-/* Google Fonts - Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');

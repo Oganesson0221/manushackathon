@@ -2,6 +2,12 @@ export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
+  // In development mode, use the simple dev login page
+  if (import.meta.env.DEV || import.meta.env.MODE === "development") {
+    return "/dev-login";
+  }
+
+  // In production, use OAuth
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
