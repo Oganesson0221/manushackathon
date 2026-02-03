@@ -3,6 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
+// Check if we're in local auth mode (no login required)
+const isLocalAuthMode = import.meta.env.VITE_AUTH_MODE === "local";
+
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
   redirectPath?: string;
@@ -44,13 +47,18 @@ export function useAuth(options?: UseAuthOptions) {
   const state = useMemo(() => {
     localStorage.setItem(
       "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
+      JSON.stringify(meQuery.data),
     );
+
+    // In local auth mode, always consider authenticated
+    const effectiveUser =
+      meQuery.data ?? (isLocalAuthMode ? { id: 1, name: "Dev User" } : null);
+
     return {
-      user: meQuery.data ?? null,
+      user: effectiveUser,
       loading: meQuery.isLoading || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      isAuthenticated: Boolean(effectiveUser) || isLocalAuthMode,
     };
   }, [
     meQuery.data,
@@ -61,13 +69,16 @@ export function useAuth(options?: UseAuthOptions) {
   ]);
 
   useEffect(() => {
+    // Never redirect in local auth mode
+    if (isLocalAuthMode) return;
+
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    window.location.href = redirectPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,

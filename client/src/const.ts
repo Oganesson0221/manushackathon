@@ -1,13 +1,25 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
+// Check if we're in local auth mode
+const isLocalAuthMode = import.meta.env.VITE_AUTH_MODE === "local";
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
+<<<<<<< Updated upstream
   // In development mode, use the simple dev login page
   if (import.meta.env.DEV || import.meta.env.MODE === "development") {
     return "/dev-login";
   }
 
   // In production, use OAuth
+=======
+  // For local development, use the simple local login page
+  if (isLocalAuthMode) {
+    return "/login";
+  }
+
+  // For production, use OAuth
+>>>>>>> Stashed changes
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
   const redirectUri = `${window.location.origin}/api/oauth/callback`;

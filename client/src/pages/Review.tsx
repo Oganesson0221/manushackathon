@@ -1,6 +1,12 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useLocation, useParams, Link } from "wouter";
-import { 
+import {
   ArrowLeft,
   Trophy,
   Target,
@@ -20,36 +26,54 @@ import {
   Loader2,
   RefreshCw,
   ChevronRight,
-  Star
+  Star,
 } from "lucide-react";
+
+// Helper to safely parse JSON array fields from database
+// MySQL JSON fields may come as strings in some cases
+function parseJsonArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // If it's a non-JSON string, return empty array
+    }
+  }
+  return [];
+}
 
 export default function Review() {
   const params = useParams<{ code: string }>();
   const roomCode = params.code?.toUpperCase() || "";
-  
+
   const { user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: roomData, isLoading } = trpc.room.get.useQuery(
     { roomCode },
-    { enabled: !!roomCode }
+    { enabled: !!roomCode },
   );
 
   const { data: speeches } = trpc.speech.getAll.useQuery(
     { roomId: roomData?.room.id || 0 },
-    { enabled: !!roomData?.room.id }
+    { enabled: !!roomData?.room.id },
   );
 
-  const { data: feedback, refetch: refetchFeedback } = trpc.feedback.get.useQuery(
-    { roomId: roomData?.room.id || 0 },
-    { enabled: !!roomData?.room.id }
-  );
+  const { data: feedback, refetch: refetchFeedback } =
+    trpc.feedback.get.useQuery(
+      { roomId: roomData?.room.id || 0 },
+      { enabled: !!roomData?.room.id },
+    );
 
-  const { data: argumentNodes, refetch: refetchNodes } = trpc.analysis.getArgumentNodes.useQuery(
-    { roomId: roomData?.room.id || 0 },
-    { enabled: !!roomData?.room.id }
-  );
+  const { data: argumentNodes, refetch: refetchNodes } =
+    trpc.analysis.getArgumentNodes.useQuery(
+      { roomId: roomData?.room.id || 0 },
+      { enabled: !!roomData?.room.id },
+    );
 
   const generateFeedback = trpc.feedback.generate.useMutation({
     onSuccess: () => {
@@ -71,12 +95,15 @@ export default function Review() {
     },
   });
 
-  const overallFeedback = feedback?.find(f => f.feedbackType === "overall");
-  const teamFeedback = feedback?.filter(f => f.feedbackType === "team") || [];
-  const individualFeedback = feedback?.filter(f => f.feedbackType === "individual") || [];
+  const overallFeedback = feedback?.find((f) => f.feedbackType === "overall");
+  const teamFeedback = feedback?.filter((f) => f.feedbackType === "team") || [];
+  const individualFeedback =
+    feedback?.filter((f) => f.feedbackType === "individual") || [];
 
-  const govArguments = argumentNodes?.filter(n => n.team === "government") || [];
-  const oppArguments = argumentNodes?.filter(n => n.team === "opposition") || [];
+  const govArguments =
+    argumentNodes?.filter((n) => n.team === "government") || [];
+  const oppArguments =
+    argumentNodes?.filter((n) => n.team === "opposition") || [];
 
   if (authLoading || isLoading) {
     return (
@@ -130,10 +157,14 @@ export default function Review() {
             </Link>
             <div>
               <h1 className="font-semibold text-lg">Debate Review</h1>
-              <span className="text-sm text-muted-foreground font-mono">{roomCode}</span>
+              <span className="text-sm text-muted-foreground font-mono">
+                {roomCode}
+              </span>
             </div>
           </div>
-          <Badge variant={room.status === "completed" ? "default" : "secondary"}>
+          <Badge
+            variant={room.status === "completed" ? "default" : "secondary"}
+          >
             {room.status}
           </Badge>
         </div>
@@ -145,7 +176,9 @@ export default function Review() {
           <CardContent className="pt-6">
             <p className="text-xl font-semibold">{motion?.motion}</p>
             {motion?.backgroundContext && (
-              <p className="text-muted-foreground mt-2">{motion.backgroundContext}</p>
+              <p className="text-muted-foreground mt-2">
+                {motion.backgroundContext}
+              </p>
             )}
           </CardContent>
         </Card>
@@ -162,24 +195,32 @@ export default function Review() {
           <TabsContent value="overview" className="space-y-6">
             {/* Winner Card */}
             {overallFeedback?.suggestedWinner && (
-              <Card className={`border-2 ${
-                overallFeedback.suggestedWinner === "government" 
-                  ? "border-blue-500 bg-blue-500/5" 
-                  : "border-red-500 bg-red-500/5"
-              }`}>
+              <Card
+                className={`border-2 ${
+                  overallFeedback.suggestedWinner === "government"
+                    ? "border-blue-500 bg-blue-500/5"
+                    : "border-red-500 bg-red-500/5"
+                }`}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-4">
-                    <Trophy className={`w-12 h-12 ${
-                      overallFeedback.suggestedWinner === "government" 
-                        ? "text-blue-500" 
-                        : "text-red-500"
-                    }`} />
+                    <Trophy
+                      className={`w-12 h-12 ${
+                        overallFeedback.suggestedWinner === "government"
+                          ? "text-blue-500"
+                          : "text-red-500"
+                      }`}
+                    />
                     <div>
-                      <p className="text-sm text-muted-foreground">Suggested Winner</p>
+                      <p className="text-sm text-muted-foreground">
+                        Suggested Winner
+                      </p>
                       <h2 className="text-2xl font-bold capitalize">
                         {overallFeedback.suggestedWinner}
                       </h2>
-                      <p className="text-sm mt-1">{overallFeedback.winningReason}</p>
+                      <p className="text-sm mt-1">
+                        {overallFeedback.winningReason}
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -205,9 +246,10 @@ export default function Review() {
               <Card>
                 <CardContent className="pt-6 text-center">
                   <p className="text-muted-foreground mb-4">
-                    No feedback generated yet. Generate AI feedback to see the debate analysis.
+                    No feedback generated yet. Generate AI feedback to see the
+                    debate analysis.
                   </p>
-                  <Button 
+                  <Button
                     onClick={handleGenerateFeedback}
                     disabled={generateFeedback.isPending}
                   >
@@ -234,11 +276,16 @@ export default function Review() {
                 <CardContent>
                   <div className="space-y-3">
                     {participants
-                      .filter(p => p.team === "government")
-                      .map(p => (
-                        <div key={p.id} className="flex items-center justify-between">
+                      .filter((p) => p.team === "government")
+                      .map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between"
+                        >
                           <div>
-                            <p className="font-medium">{p.user?.name || "Unknown"}</p>
+                            <p className="font-medium">
+                              {p.user?.name || "Unknown"}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {getRoleLabel(p.speakerRole)}
                             </p>
@@ -257,11 +304,16 @@ export default function Review() {
                 <CardContent>
                   <div className="space-y-3">
                     {participants
-                      .filter(p => p.team === "opposition")
-                      .map(p => (
-                        <div key={p.id} className="flex items-center justify-between">
+                      .filter((p) => p.team === "opposition")
+                      .map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between"
+                        >
                           <div>
-                            <p className="font-medium">{p.user?.name || "Unknown"}</p>
+                            <p className="font-medium">
+                              {p.user?.name || "Unknown"}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {getRoleLabel(p.speakerRole)}
                             </p>
@@ -280,67 +332,89 @@ export default function Review() {
               <>
                 {/* Team Feedback */}
                 <div className="grid md:grid-cols-2 gap-6">
-                  {teamFeedback.map(tf => (
-                    <Card key={tf.id} className={`border-l-4 ${
-                      tf.team === "government" ? "border-l-blue-500" : "border-l-red-500"
-                    }`}>
-                      <CardHeader>
-                        <CardTitle className="capitalize">{tf.team} Team Feedback</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {tf.strongestArguments && (tf.strongestArguments as string[]).length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
-                              <Star className="w-4 h-4 text-yellow-500" />
-                              Strongest Arguments
-                            </h4>
-                            <ul className="space-y-1">
-                              {(tf.strongestArguments as string[]).map((arg, i) => (
-                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                                  <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
-                                  {arg}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        
-                        {tf.missedResponses && (tf.missedResponses as string[]).length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
-                              <AlertCircle className="w-4 h-4 text-orange-500" />
-                              Missed Responses
-                            </h4>
-                            <ul className="space-y-1">
-                              {(tf.missedResponses as string[]).map((miss, i) => (
-                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                                  <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
-                                  {miss}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+                  {teamFeedback.map((tf) => {
+                    const strongestArgs = parseJsonArray(tf.strongestArguments);
+                    const missedResp = parseJsonArray(tf.missedResponses);
+                    const improvementsList = parseJsonArray(tf.improvements);
 
-                        {tf.improvements && (tf.improvements as string[]).length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
-                              <Lightbulb className="w-4 h-4 text-green-500" />
-                              Suggestions
-                            </h4>
-                            <ul className="space-y-1">
-                              {(tf.improvements as string[]).map((imp, i) => (
-                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                                  <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
-                                  {imp}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                    return (
+                      <Card
+                        key={tf.id}
+                        className={`border-l-4 ${
+                          tf.team === "government"
+                            ? "border-l-blue-500"
+                            : "border-l-red-500"
+                        }`}
+                      >
+                        <CardHeader>
+                          <CardTitle className="capitalize">
+                            {tf.team} Team Feedback
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {strongestArgs.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                                <Star className="w-4 h-4 text-yellow-500" />
+                                Strongest Arguments
+                              </h4>
+                              <ul className="space-y-1">
+                                {strongestArgs.map((arg, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm text-muted-foreground flex items-start gap-2"
+                                  >
+                                    <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
+                                    {arg}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {missedResp.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                                <AlertCircle className="w-4 h-4 text-orange-500" />
+                                Missed Responses
+                              </h4>
+                              <ul className="space-y-1">
+                                {missedResp.map((miss, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm text-muted-foreground flex items-start gap-2"
+                                  >
+                                    <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
+                                    {miss}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {improvementsList.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                                <Lightbulb className="w-4 h-4 text-green-500" />
+                                Suggestions
+                              </h4>
+                              <ul className="space-y-1">
+                                {improvementsList.map((imp, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm text-muted-foreground flex items-start gap-2"
+                                  >
+                                    <ChevronRight className="w-4 h-4 mt-0.5 shrink-0" />
+                                    {imp}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
 
                 {/* Individual Feedback */}
@@ -350,47 +424,75 @@ export default function Review() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
-                      {individualFeedback.map(inf => {
-                        const participant = participants.find(p => p.id === inf.participantId);
+                      {individualFeedback.map((inf) => {
+                        const participant = participants.find(
+                          (p) => p.id === inf.participantId,
+                        );
+                        const infStrongest = parseJsonArray(
+                          inf.strongestArguments,
+                        );
+                        const infMissed = parseJsonArray(inf.missedResponses);
+                        const infImprovements = parseJsonArray(
+                          inf.improvements,
+                        );
+
                         return (
-                          <div key={inf.id} className="border-b pb-4 last:border-0">
+                          <div
+                            key={inf.id}
+                            className="border-b pb-4 last:border-0"
+                          >
                             <div className="flex items-center gap-2 mb-3">
-                              <Badge variant={participant?.team === "government" ? "default" : "destructive"}>
+                              <Badge
+                                variant={
+                                  participant?.team === "government"
+                                    ? "default"
+                                    : "destructive"
+                                }
+                              >
                                 {participant?.team}
                               </Badge>
                               <span className="font-medium">
-                                {participant?.user?.name} - {getRoleLabel(participant?.speakerRole || "")}
+                                {participant?.user?.name} -{" "}
+                                {getRoleLabel(participant?.speakerRole || "")}
                               </span>
                             </div>
-                            
+
                             <div className="grid md:grid-cols-3 gap-4 text-sm">
-                              {inf.strongestArguments && (
+                              {infStrongest.length > 0 && (
                                 <div>
-                                  <p className="font-medium text-green-600 mb-1">Strengths</p>
+                                  <p className="font-medium text-green-600 mb-1">
+                                    Strengths
+                                  </p>
                                   <ul className="text-muted-foreground space-y-1">
-                                    {(inf.strongestArguments as string[]).slice(0, 3).map((s, i) => (
+                                    {infStrongest.slice(0, 3).map((s, i) => (
                                       <li key={i}>• {s}</li>
                                     ))}
                                   </ul>
                                 </div>
                               )}
-                              {inf.missedResponses && (
+                              {infMissed.length > 0 && (
                                 <div>
-                                  <p className="font-medium text-orange-600 mb-1">Missed</p>
+                                  <p className="font-medium text-orange-600 mb-1">
+                                    Missed
+                                  </p>
                                   <ul className="text-muted-foreground space-y-1">
-                                    {(inf.missedResponses as string[]).slice(0, 3).map((m, i) => (
+                                    {infMissed.slice(0, 3).map((m, i) => (
                                       <li key={i}>• {m}</li>
                                     ))}
                                   </ul>
                                 </div>
                               )}
-                              {inf.improvements && (
+                              {infImprovements.length > 0 && (
                                 <div>
-                                  <p className="font-medium text-blue-600 mb-1">Improve</p>
+                                  <p className="font-medium text-blue-600 mb-1">
+                                    Improve
+                                  </p>
                                   <ul className="text-muted-foreground space-y-1">
-                                    {(inf.improvements as string[]).slice(0, 3).map((imp, i) => (
-                                      <li key={i}>• {imp}</li>
-                                    ))}
+                                    {infImprovements
+                                      .slice(0, 3)
+                                      .map((imp, i) => (
+                                        <li key={i}>• {imp}</li>
+                                      ))}
                                   </ul>
                                 </div>
                               )}
@@ -407,9 +509,10 @@ export default function Review() {
                 <CardContent className="pt-6 text-center">
                   <Target className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground mb-4">
-                    No feedback available yet. Generate AI feedback to see detailed analysis.
+                    No feedback available yet. Generate AI feedback to see
+                    detailed analysis.
                   </p>
-                  <Button 
+                  <Button
                     onClick={handleGenerateFeedback}
                     disabled={generateFeedback.isPending}
                   >
@@ -438,14 +541,16 @@ export default function Review() {
                       <GitBranch className="w-5 h-5" />
                       Government Arguments
                     </CardTitle>
-                    <CardDescription>{govArguments.length} points extracted</CardDescription>
+                    <CardDescription>
+                      {govArguments.length} points extracted
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
                       <div className="space-y-3">
-                        {govArguments.map(node => (
-                          <div 
-                            key={node.id} 
+                        {govArguments.map((node) => (
+                          <div
+                            key={node.id}
                             className="p-3 rounded-lg border bg-card mindmap-node"
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
@@ -455,19 +560,25 @@ export default function Review() {
                               {node.qualityScore && (
                                 <div className="flex items-center gap-1">
                                   <Star className="w-3 h-3 text-yellow-500" />
-                                  <span className="text-xs font-medium">{node.qualityScore}/10</span>
+                                  <span className="text-xs font-medium">
+                                    {node.qualityScore}/10
+                                  </span>
                                 </div>
                               )}
                             </div>
-                            <p className="text-sm font-medium">{node.content}</p>
+                            <p className="text-sm font-medium">
+                              {node.content}
+                            </p>
                             {node.qualityExplanation && (
                               <p className="text-xs text-muted-foreground mt-2">
                                 {node.qualityExplanation}
                               </p>
                             )}
                             {node.wasAnswered !== null && (
-                              <Badge 
-                                variant={node.wasAnswered ? "secondary" : "destructive"}
+                              <Badge
+                                variant={
+                                  node.wasAnswered ? "secondary" : "destructive"
+                                }
                                 className="mt-2 text-xs"
                               >
                                 {node.wasAnswered ? "Answered" : "Unanswered"}
@@ -487,14 +598,16 @@ export default function Review() {
                       <GitBranch className="w-5 h-5" />
                       Opposition Arguments
                     </CardTitle>
-                    <CardDescription>{oppArguments.length} points extracted</CardDescription>
+                    <CardDescription>
+                      {oppArguments.length} points extracted
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
                       <div className="space-y-3">
-                        {oppArguments.map(node => (
-                          <div 
-                            key={node.id} 
+                        {oppArguments.map((node) => (
+                          <div
+                            key={node.id}
                             className="p-3 rounded-lg border bg-card mindmap-node"
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
@@ -504,19 +617,25 @@ export default function Review() {
                               {node.qualityScore && (
                                 <div className="flex items-center gap-1">
                                   <Star className="w-3 h-3 text-yellow-500" />
-                                  <span className="text-xs font-medium">{node.qualityScore}/10</span>
+                                  <span className="text-xs font-medium">
+                                    {node.qualityScore}/10
+                                  </span>
                                 </div>
                               )}
                             </div>
-                            <p className="text-sm font-medium">{node.content}</p>
+                            <p className="text-sm font-medium">
+                              {node.content}
+                            </p>
                             {node.qualityExplanation && (
                               <p className="text-xs text-muted-foreground mt-2">
                                 {node.qualityExplanation}
                               </p>
                             )}
                             {node.wasAnswered !== null && (
-                              <Badge 
-                                variant={node.wasAnswered ? "secondary" : "destructive"}
+                              <Badge
+                                variant={
+                                  node.wasAnswered ? "secondary" : "destructive"
+                                }
                                 className="mt-2 text-xs"
                               >
                                 {node.wasAnswered ? "Answered" : "Unanswered"}
@@ -534,11 +653,16 @@ export default function Review() {
                 <CardContent className="pt-6 text-center">
                   <GitBranch className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground mb-4">
-                    No argument map generated yet. Generate the mindmap to visualize debate flow.
+                    No argument map generated yet. Generate the mindmap to
+                    visualize debate flow.
                   </p>
-                  <Button 
+                  <Button
                     onClick={handleGenerateMindmap}
-                    disabled={generateMindmap.isPending || !speeches || speeches.length === 0}
+                    disabled={
+                      generateMindmap.isPending ||
+                      !speeches ||
+                      speeches.length === 0
+                    }
                   >
                     {generateMindmap.isPending ? (
                       <>
@@ -568,18 +692,33 @@ export default function Review() {
                   <ScrollArea className="h-[500px]">
                     <div className="space-y-6">
                       {speeches.map((speech, index) => {
-                        const participant = participants.find(p => p.id === speech.participantId);
+                        const participant = participants.find(
+                          (p) => p.id === speech.participantId,
+                        );
                         return (
-                          <div key={speech.id} className="border-b pb-4 last:border-0">
+                          <div
+                            key={speech.id}
+                            className="border-b pb-4 last:border-0"
+                          >
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge variant={participant?.team === "government" ? "default" : "destructive"}>
+                              <Badge
+                                variant={
+                                  participant?.team === "government"
+                                    ? "default"
+                                    : "destructive"
+                                }
+                              >
                                 {participant?.team}
                               </Badge>
                               <span className="font-medium">
                                 {getRoleLabel(speech.speakerRole)}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                ({speech.duration ? `${Math.floor(speech.duration / 60)}:${(speech.duration % 60).toString().padStart(2, '0')}` : 'N/A'})
+                                (
+                                {speech.duration
+                                  ? `${Math.floor(speech.duration / 60)}:${(speech.duration % 60).toString().padStart(2, "0")}`
+                                  : "N/A"}
+                                )
                               </span>
                             </div>
                             {speech.transcript ? (

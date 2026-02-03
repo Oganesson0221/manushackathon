@@ -1,10 +1,13 @@
+<<<<<<< Updated upstream
 /* Google Fonts - Inter (must be at the top before other @import statements) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
 
+=======
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+>>>>>>> Stashed changes
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -81,7 +84,7 @@
   --sidebar-accent-foreground: oklch(0% 0 0);
   --sidebar-border: oklch(0% 0 0);
   --sidebar-ring: oklch(0% 0 0);
-  
+
   /* Custom brutalist colors */
   --government: oklch(0% 0 0);
   --opposition: oklch(45% 0 0);
@@ -123,34 +126,44 @@
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
     font-feature-settings: "ss01", "ss02", "cv01";
   }
-  
+
   /* Brutalist typography */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-black tracking-tighter uppercase;
     letter-spacing: -0.05em;
   }
-  
+
   h1 {
     @apply text-5xl md:text-7xl lg:text-8xl;
     line-height: 0.85;
   }
-  
+
   h2 {
     @apply text-3xl md:text-5xl lg:text-6xl;
     line-height: 0.9;
   }
-  
+
   h3 {
     @apply text-xl md:text-3xl lg:text-4xl;
     line-height: 0.95;
   }
-  
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -199,25 +212,25 @@
   .brutalist-border {
     @apply border-4 border-foreground;
   }
-  
+
   .brutalist-border-thick {
     @apply border-8 border-foreground;
   }
-  
+
   /* Brutalist shadows */
   .brutalist-shadow {
     box-shadow: 8px 8px 0 0 var(--foreground);
   }
-  
+
   .brutalist-shadow-lg {
     box-shadow: 16px 16px 0 0 var(--foreground);
   }
-  
+
   .brutalist-shadow-hover:hover {
     box-shadow: 12px 12px 0 0 var(--foreground);
     transform: translate(-4px, -4px);
   }
-  
+
   /* Massive typography */
   .text-massive {
     font-size: clamp(3rem, 12vw, 10rem);
@@ -226,7 +239,7 @@
     font-weight: 900;
     text-transform: uppercase;
   }
-  
+
   .text-display {
     font-size: clamp(2rem, 6vw, 5rem);
     line-height: 0.85;
@@ -234,45 +247,45 @@
     font-weight: 900;
     text-transform: uppercase;
   }
-  
+
   /* Bracket decorations */
   .brutalist-bracket::before {
     content: "[";
     @apply mr-2 font-black text-muted-foreground;
   }
-  
+
   .brutalist-bracket::after {
     content: "]";
     @apply ml-2 font-black text-muted-foreground;
   }
-  
+
   /* Team colors */
   .team-gov {
     @apply bg-foreground text-background;
   }
-  
+
   .team-opp {
     @apply bg-muted-foreground text-background;
   }
-  
+
   /* Timer states */
   .timer-warning {
     color: var(--warning);
     animation: pulse-warning 1s ease-in-out infinite;
   }
-  
+
   .timer-danger {
     @apply text-destructive;
     animation: pulse-danger 0.5s ease-in-out infinite;
   }
-  
+
   /* Underline decoration */
   .brutalist-underline {
     text-decoration: underline;
     text-decoration-thickness: 4px;
     text-underline-offset: 8px;
   }
-  
+
   /* Strikethrough */
   .brutalist-strike {
     text-decoration: line-through;
@@ -336,7 +349,8 @@
 }
 
 @keyframes pulse-border {
-  0%, 100% {
+  0%,
+  100% {
     border-color: var(--foreground);
   }
   50% {
@@ -349,10 +363,12 @@
 }
 
 @keyframes blink {
-  0%, 50% {
+  0%,
+  50% {
     opacity: 1;
   }
-  51%, 100% {
+  51%,
+  100% {
     opacity: 0;
   }
 }
@@ -362,16 +378,22 @@
 }
 
 @keyframes pulse-warning {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 @keyframes pulse-danger {
-  0%, 100% { 
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
-  50% { 
+  50% {
     opacity: 0.8;
     transform: scale(1.02);
   }
@@ -379,8 +401,13 @@
 
 /* Speech indicator */
 @keyframes speaking {
-  0%, 100% { transform: scaleY(0.3); }
-  50% { transform: scaleY(1); }
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 .speaking-indicator span {
@@ -395,3 +422,8 @@
 .speaking-indicator span:nth-child(4) {
   animation-delay: 0.3s;
 }
+<<<<<<< Updated upstream
+=======
+
+/* Google Fonts - Inter */
+>>>>>>> Stashed changes

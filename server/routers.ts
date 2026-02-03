@@ -6,22 +6,22 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
-import { 
-  generateRoomCode, 
-  ASIAN_PARLIAMENTARY_FORMAT, 
-  TOPIC_AREAS, 
+import {
+  generateRoomCode,
+  ASIAN_PARLIAMENTARY_FORMAT,
+  TOPIC_AREAS,
   DIFFICULTY_LEVELS,
   EXPERIENCE_LEVELS,
   type TopicArea,
-  type DifficultyLevel
+  type DifficultyLevel,
 } from "@shared/debate";
 import { TRPCError } from "@trpc/server";
 
 export const appRouter = router({
   system: systemRouter,
-  
+
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -34,20 +34,24 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       return ctx.user;
     }),
-    
+
     update: protectedProcedure
-      .input(z.object({
-        name: z.string().min(1).max(100).optional(),
-        bio: z.string().max(500).optional(),
-        experienceLevel: z.enum(["novice", "intermediate", "advanced", "expert"]).optional(),
-        topicalInterests: z.array(z.string()).max(5).optional(),
-        background: z.string().max(1000).optional(),
-      }))
+      .input(
+        z.object({
+          name: z.string().min(1).max(100).optional(),
+          bio: z.string().max(500).optional(),
+          experienceLevel: z
+            .enum(["novice", "intermediate", "advanced", "expert"])
+            .optional(),
+          topicalInterests: z.array(z.string()).max(5).optional(),
+          background: z.string().max(1000).optional(),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
         await db.updateUserProfile(ctx.user.id, input);
         return { success: true };
       }),
-    
+
     getDebateHistory: protectedProcedure.query(async ({ ctx }) => {
       return await db.getUserDebateHistory(ctx.user.id);
     }),
@@ -56,66 +60,115 @@ export const appRouter = router({
   // Debate room management
   room: router({
     create: protectedProcedure
-      .input(z.object({
-        format: z.enum(["asian_parliamentary"]).default("asian_parliamentary"),
-      }))
+      .input(
+        z.object({
+          format: z
+            .enum(["asian_parliamentary"])
+            .default("asian_parliamentary"),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
-        const roomCode = generateRoomCode();
-        const roomId = await db.createDebateRoom({
-          roomCode,
-          creatorId: ctx.user.id,
-          format: input.format,
-          status: "waiting",
-          currentPhase: "setup",
-        });
-        return { roomId, roomCode };
+        console.log(
+          "[Room] Creating room for user:",
+          ctx.user.id,
+          ctx.user.name,
+        );
+        try {
+          const roomCode = generateRoomCode();
+          console.log("[Room] Generated code:", roomCode);
+          const roomId = await db.createDebateRoom({
+            roomCode,
+            creatorId: ctx.user.id,
+            format: input.format,
+            status: "waiting",
+            currentPhase: "setup",
+          });
+          console.log("[Room] Created room:", roomId, roomCode);
+          return { roomId, roomCode };
+        } catch (error) {
+          console.error("[Room] Error creating room:", error);
+          throw error;
+        }
       }),
-    
+
     join: protectedProcedure
-      .input(z.object({
-        roomCode: z.string().length(6),
-        team: z.enum(["government", "opposition"]),
-        speakerRole: z.enum([
-          "prime_minister",
-          "deputy_prime_minister",
-          "government_whip",
-          "leader_of_opposition",
-          "deputy_leader_of_opposition",
-          "opposition_whip"
-        ]),
-      }))
+      .input(
+        z.object({
+          roomCode: z.string().length(6),
+          team: z.enum(["government", "opposition"]),
+          speakerRole: z.enum([
+            "prime_minister",
+            "deputy_prime_minister",
+            "government_whip",
+            "leader_of_opposition",
+            "deputy_leader_of_opposition",
+            "opposition_whip",
+          ]),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
         const room = await db.getDebateRoomByCode(input.roomCode);
         if (!room) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
         }
         if (room.status !== "waiting") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Room is not accepting participants" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Room is not accepting participants",
+          });
         }
-        
+
         // Check if user is already in the room
         const existing = await db.getParticipantWithUser(room.id, ctx.user.id);
         if (existing) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "You are already in this room" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "You are already in this room",
+          });
         }
-        
+
         // Check if role is taken
         const participants = await db.getRoomParticipants(room.id);
-        const roleTaken = participants.some(p => p.speakerRole === input.speakerRole);
+        const roleTaken = participants.some(
+          (p) => p.speakerRole === input.speakerRole,
+        );
         if (roleTaken) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "This speaker role is already taken" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "This speaker role is already taken",
+          });
         }
-        
+
         // Validate team-role match
-        const govRoles = ["prime_minister", "deputy_prime_minister", "government_whip"];
-        const oppRoles = ["leader_of_opposition", "deputy_leader_of_opposition", "opposition_whip"];
-        if (input.team === "government" && !govRoles.includes(input.speakerRole)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid role for Government team" });
+        const govRoles = [
+          "prime_minister",
+          "deputy_prime_minister",
+          "government_whip",
+        ];
+        const oppRoles = [
+          "leader_of_opposition",
+          "deputy_leader_of_opposition",
+          "opposition_whip",
+        ];
+        if (
+          input.team === "government" &&
+          !govRoles.includes(input.speakerRole)
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid role for Government team",
+          });
         }
-        if (input.team === "opposition" && !oppRoles.includes(input.speakerRole)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid role for Opposition team" });
+        if (
+          input.team === "opposition" &&
+          !oppRoles.includes(input.speakerRole)
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid role for Opposition team",
+          });
         }
-        
+
         await db.addParticipant({
           roomId: room.id,
           userId: ctx.user.id,
@@ -123,17 +176,17 @@ export const appRouter = router({
           speakerRole: input.speakerRole,
           isReady: false,
         });
-        
+
         return { success: true, roomId: room.id };
       }),
-    
+
     leave: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await db.removeParticipant(input.roomId, ctx.user.id);
         return { success: true };
       }),
-    
+
     get: protectedProcedure
       .input(z.object({ roomCode: z.string() }))
       .query(async ({ input }) => {
@@ -141,21 +194,23 @@ export const appRouter = router({
         if (!room) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
         }
-        
+
         const participants = await db.getRoomParticipants(room.id);
-        const motion = room.motionId ? await db.getMotionById(room.motionId) : null;
-        
+        const motion = room.motionId
+          ? await db.getMotionById(room.motionId)
+          : null;
+
         // Get user details for each participant
         const participantsWithUsers = await Promise.all(
           participants.map(async (p) => {
             const user = await db.getUserById(p.userId);
             return { ...p, user };
-          })
+          }),
         );
-        
+
         return { room, participants: participantsWithUsers, motion };
       }),
-    
+
     getById: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .query(async ({ input }) => {
@@ -163,35 +218,43 @@ export const appRouter = router({
         if (!room) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
         }
-        
+
         const participants = await db.getRoomParticipants(room.id);
-        const motion = room.motionId ? await db.getMotionById(room.motionId) : null;
-        
+        const motion = room.motionId
+          ? await db.getMotionById(room.motionId)
+          : null;
+
         const participantsWithUsers = await Promise.all(
           participants.map(async (p) => {
             const user = await db.getUserById(p.userId);
             return { ...p, user };
-          })
+          }),
         );
-        
+
         return { room, participants: participantsWithUsers, motion };
       }),
-    
+
     setReady: protectedProcedure
       .input(z.object({ roomId: z.number(), isReady: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        const participant = await db.getParticipantWithUser(input.roomId, ctx.user.id);
+        const participant = await db.getParticipantWithUser(
+          input.roomId,
+          ctx.user.id,
+        );
         if (!participant) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "You are not in this room" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "You are not in this room",
+          });
         }
         await db.updateParticipantReady(participant.id, input.isReady);
         return { success: true };
       }),
-    
+
     listActive: protectedProcedure.query(async () => {
       return await db.getActiveRooms();
     }),
-    
+
     start: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -200,27 +263,41 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
         }
         if (room.creatorId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Only the room creator can start the debate" });
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the room creator can start the debate",
+          });
         }
         if (!room.motionId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "A motion must be set before starting" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A motion must be set before starting",
+          });
         }
-        
+
         const participants = await db.getRoomParticipants(room.id);
         if (participants.length < 1) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "At least one participant must join before starting" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "At least one participant must join before starting",
+          });
         }
-        
-        const allReady = participants.every(p => p.isReady);
+
+        const allReady = participants.every((p) => p.isReady);
         if (!allReady) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "All participants must be ready" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "All participants must be ready",
+          });
         }
-        
+
         // Find the first speaker who has actually joined
-        const participantRoles = new Set(participants.map(p => p.speakerRole));
+        const participantRoles = new Set(
+          participants.map((p) => p.speakerRole),
+        );
         const fullSpeakingOrder = ASIAN_PARLIAMENTARY_FORMAT.speakingOrder;
         let firstSpeakerIndex = 0;
-        
+
         for (let i = 0; i < fullSpeakingOrder.length; i++) {
           const speaker = fullSpeakingOrder[i];
           const role = speaker.role;
@@ -240,22 +317,26 @@ export const appRouter = router({
             continue;
           }
           // Regular speaker roles
-          if (participantRoles.has(role as typeof participants[number]["speakerRole"])) {
+          if (
+            participantRoles.has(
+              role as (typeof participants)[number]["speakerRole"],
+            )
+          ) {
             firstSpeakerIndex = i;
             break;
           }
         }
-        
+
         await db.updateDebateRoom(input.roomId, {
           status: "in_progress",
           currentPhase: "debate",
           currentSpeakerIndex: firstSpeakerIndex,
           startedAt: new Date(),
         });
-        
+
         return { success: true };
       }),
-    
+
     advanceSpeaker: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .mutation(async ({ input }) => {
@@ -263,14 +344,16 @@ export const appRouter = router({
         if (!room) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
         }
-        
+
         // Get participants to determine which speakers are present
         const participants = await db.getRoomParticipants(room.id);
-        const participantRoles = new Set(participants.map(p => p.speakerRole));
-        
+        const participantRoles = new Set(
+          participants.map((p) => p.speakerRole),
+        );
+
         // Build dynamic speaking order based on who joined
         const fullSpeakingOrder = ASIAN_PARLIAMENTARY_FORMAT.speakingOrder;
-        const activeSpeakingOrder = fullSpeakingOrder.filter(speaker => {
+        const activeSpeakingOrder = fullSpeakingOrder.filter((speaker) => {
           // For reply speeches, check if the original speaker is present
           if (speaker.role === "opposition_reply") {
             return participantRoles.has("leader_of_opposition");
@@ -280,12 +363,14 @@ export const appRouter = router({
           }
           return participantRoles.has(speaker.role);
         });
-        
+
         // Find current position in active order and move to next
         const currentSpeaker = fullSpeakingOrder[room.currentSpeakerIndex || 0];
-        const currentActiveIndex = activeSpeakingOrder.findIndex(s => s.role === currentSpeaker?.role);
+        const currentActiveIndex = activeSpeakingOrder.findIndex(
+          (s) => s.role === currentSpeaker?.role,
+        );
         const nextActiveIndex = currentActiveIndex + 1;
-        
+
         if (nextActiveIndex >= activeSpeakingOrder.length) {
           // Debate is complete
           await db.updateDebateRoom(input.roomId, {
@@ -295,12 +380,16 @@ export const appRouter = router({
           });
           return { completed: true, nextSpeakerIndex: null };
         }
-        
+
         // Find the index in the full speaking order for the next active speaker
         const nextSpeaker = activeSpeakingOrder[nextActiveIndex];
-        const nextFullIndex = fullSpeakingOrder.findIndex(s => s.role === nextSpeaker.role);
-        
-        await db.updateDebateRoom(input.roomId, { currentSpeakerIndex: nextFullIndex });
+        const nextFullIndex = fullSpeakingOrder.findIndex(
+          (s) => s.role === nextSpeaker.role,
+        );
+
+        await db.updateDebateRoom(input.roomId, {
+          currentSpeakerIndex: nextFullIndex,
+        });
         return { completed: false, nextSpeakerIndex: nextFullIndex };
       }),
   }),
@@ -308,15 +397,30 @@ export const appRouter = router({
   // Motion generation and management
   motion: router({
     generate: protectedProcedure
-      .input(z.object({
-        topicArea: z.enum(["politics", "ethics", "technology", "economics", "social", "environment", "education", "health"]),
-        difficulty: z.enum(["novice", "intermediate", "advanced"]),
-        roomId: z.number(),
-      }))
+      .input(
+        z.object({
+          topicArea: z.enum([
+            "politics",
+            "ethics",
+            "technology",
+            "economics",
+            "social",
+            "environment",
+            "education",
+            "health",
+          ]),
+          difficulty: z.enum(["novice", "intermediate", "advanced"]),
+          roomId: z.number(),
+        }),
+      )
       .mutation(async ({ input }) => {
-        const topicLabel = TOPIC_AREAS.find(t => t.id === input.topicArea)?.label || input.topicArea;
-        const diffLabel = DIFFICULTY_LEVELS.find(d => d.id === input.difficulty)?.label || input.difficulty;
-        
+        const topicLabel =
+          TOPIC_AREAS.find((t) => t.id === input.topicArea)?.label ||
+          input.topicArea;
+        const diffLabel =
+          DIFFICULTY_LEVELS.find((d) => d.id === input.difficulty)?.label ||
+          input.difficulty;
+
         const response = await invokeLLM({
           messages: [
             {
@@ -330,12 +434,12 @@ export const appRouter = router({
 Respond with a JSON object containing:
 - motion: The debate motion starting with "This House..."
 - backgroundContext: A brief 2-3 sentence explanation of the issue
-- keyStakeholders: An array of 3-5 key stakeholders affected by this motion`
+- keyStakeholders: An array of 3-5 key stakeholders affected by this motion`,
             },
             {
               role: "user",
-              content: `Generate a ${diffLabel} level debate motion about ${topicLabel}.`
-            }
+              content: `Generate a ${diffLabel} level debate motion about ${topicLabel}.`,
+            },
           ],
           response_format: {
             type: "json_schema",
@@ -346,27 +450,33 @@ Respond with a JSON object containing:
                 type: "object",
                 properties: {
                   motion: { type: "string", description: "The debate motion" },
-                  backgroundContext: { type: "string", description: "Brief context about the issue" },
-                  keyStakeholders: { 
-                    type: "array", 
+                  backgroundContext: {
+                    type: "string",
+                    description: "Brief context about the issue",
+                  },
+                  keyStakeholders: {
+                    type: "array",
                     items: { type: "string" },
-                    description: "Key stakeholders affected" 
-                  }
+                    description: "Key stakeholders affected",
+                  },
                 },
                 required: ["motion", "backgroundContext", "keyStakeholders"],
-                additionalProperties: false
-              }
-            }
-          }
+                additionalProperties: false,
+              },
+            },
+          },
         });
-        
+
         const content = response.choices[0]?.message?.content;
-        if (!content || typeof content !== 'string') {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate motion" });
+        if (!content || typeof content !== "string") {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate motion",
+          });
         }
-        
+
         const motionData = JSON.parse(content);
-        
+
         const motionId = await db.createMotion({
           motion: motionData.motion,
           topicArea: input.topicArea,
@@ -375,18 +485,18 @@ Respond with a JSON object containing:
           keyStakeholders: motionData.keyStakeholders,
           isAiGenerated: true,
         });
-        
+
         // Link motion to room
         await db.updateDebateRoom(input.roomId, { motionId });
-        
-        return { 
-          motionId, 
+
+        return {
+          motionId,
           motion: motionData.motion,
           backgroundContext: motionData.backgroundContext,
-          keyStakeholders: motionData.keyStakeholders
+          keyStakeholders: motionData.keyStakeholders,
         };
       }),
-    
+
     get: protectedProcedure
       .input(z.object({ motionId: z.number() }))
       .query(async ({ input }) => {
@@ -397,17 +507,25 @@ Respond with a JSON object containing:
   // Speech and transcription management
   speech: router({
     create: protectedProcedure
-      .input(z.object({
-        roomId: z.number(),
-        speakerRole: z.string(),
-        speechType: z.enum(["substantive", "reply"]),
-      }))
+      .input(
+        z.object({
+          roomId: z.number(),
+          speakerRole: z.string(),
+          speechType: z.enum(["substantive", "reply"]),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
-        const participant = await db.getParticipantWithUser(input.roomId, ctx.user.id);
+        const participant = await db.getParticipantWithUser(
+          input.roomId,
+          ctx.user.id,
+        );
         if (!participant) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "You are not in this room" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "You are not in this room",
+          });
         }
-        
+
         const speechId = await db.createSpeech({
           roomId: input.roomId,
           participantId: participant.id,
@@ -415,16 +533,18 @@ Respond with a JSON object containing:
           speechType: input.speechType,
           startedAt: new Date(),
         });
-        
+
         return { speechId };
       }),
-    
+
     updateTranscript: protectedProcedure
-      .input(z.object({
-        speechId: z.number(),
-        transcript: z.string(),
-        audioUrl: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          speechId: z.number(),
+          transcript: z.string(),
+          audioUrl: z.string().optional(),
+        }),
+      )
       .mutation(async ({ input }) => {
         await db.updateSpeech(input.speechId, {
           transcript: input.transcript,
@@ -432,12 +552,14 @@ Respond with a JSON object containing:
         });
         return { success: true };
       }),
-    
+
     end: protectedProcedure
-      .input(z.object({
-        speechId: z.number(),
-        duration: z.number(),
-      }))
+      .input(
+        z.object({
+          speechId: z.number(),
+          duration: z.number(),
+        }),
+      )
       .mutation(async ({ input }) => {
         await db.updateSpeech(input.speechId, {
           endedAt: new Date(),
@@ -445,70 +567,83 @@ Respond with a JSON object containing:
         });
         return { success: true };
       }),
-    
+
     getAll: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .query(async ({ input }) => {
         return await db.getRoomSpeeches(input.roomId);
       }),
-    
+
     transcribe: protectedProcedure
-      .input(z.object({
-        audioData: z.string(), // Base64 encoded audio
-        speechId: z.number(),
-        timestamp: z.number().optional(),
-      }))
+      .input(
+        z.object({
+          audioData: z.string(), // Base64 encoded audio
+          speechId: z.number(),
+          timestamp: z.number().optional(),
+        }),
+      )
       .mutation(async ({ input }) => {
         // Import the direct buffer transcription helper
-        const { transcribeBuffer } = await import('./_core/transcribeBuffer');
-        
+        const { transcribeBuffer } = await import("./_core/transcribeBuffer");
+
         // Decode base64 audio
-        const audioBuffer = Buffer.from(input.audioData, 'base64');
-        
+        const audioBuffer = Buffer.from(input.audioData, "base64");
+
         // Check minimum audio size (at least 1KB for valid audio)
         if (audioBuffer.length < 1000) {
-          console.log('[Transcription] Audio too small:', audioBuffer.length, 'bytes');
-          return { 
-            transcript: '',
+          console.log(
+            "[Transcription] Audio too small:",
+            audioBuffer.length,
+            "bytes",
+          );
+          return {
+            transcript: "",
             segments: [],
           };
         }
-        
-        console.log('[Transcription] Processing audio directly:', audioBuffer.length, 'bytes');
-        
+
+        console.log(
+          "[Transcription] Processing audio directly:",
+          audioBuffer.length,
+          "bytes",
+        );
+
         // Transcribe directly from buffer (bypasses S3 URL access issues)
         const result = await transcribeBuffer({
           audioBuffer,
-          mimeType: 'audio/webm',
-          language: 'en',
-          prompt: 'Transcribe this debate speech clearly and accurately.',
+          mimeType: "audio/webm",
+          language: "en",
+          prompt: "Transcribe this debate speech clearly and accurately.",
         });
-        
+
         // Check if it's an error response
-        if ('error' in result) {
-          console.error('[Transcription] Error:', result.error, result.details);
-          return { 
-            transcript: '',
+        if ("error" in result) {
+          console.error("[Transcription] Error:", result.error, result.details);
+          return {
+            transcript: "",
             segments: [],
           };
         }
-        
+
         // Get speech to find room ID and speaker info
         const speech = await db.getSpeechById(input.speechId);
         if (!speech) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Speech not found" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Speech not found",
+          });
         }
-        
+
         // Append to existing transcript
-        const existingTranscript = speech.transcript || '';
-        const newTranscript = existingTranscript 
-          ? `${existingTranscript} ${result.text}` 
+        const existingTranscript = speech.transcript || "";
+        const newTranscript = existingTranscript
+          ? `${existingTranscript} ${result.text}`
           : result.text;
-        
+
         await db.updateSpeech(input.speechId, {
           transcript: newTranscript,
         });
-        
+
         // Save transcript segment to DB for real-time sync
         const latestSeq = await db.getLatestTranscriptSequence(speech.roomId);
         await db.createTranscriptSegment({
@@ -520,8 +655,8 @@ Respond with a JSON object containing:
           timestamp: input.timestamp || 0,
           sequenceNumber: latestSeq + 1,
         });
-        
-        return { 
+
+        return {
           transcript: result.text,
           segments: result.segments,
           sequenceNumber: latestSeq + 1,
@@ -538,18 +673,23 @@ Respond with a JSON object containing:
         const segments = await db.getRoomTranscriptSegments(input.roomId);
         return { segments };
       }),
-    
+
     // Poll for new segments since a given sequence number
     poll: protectedProcedure
-      .input(z.object({ 
-        roomId: z.number(),
-        afterSequence: z.number(),
-      }))
+      .input(
+        z.object({
+          roomId: z.number(),
+          afterSequence: z.number(),
+        }),
+      )
       .query(async ({ input }) => {
-        const segments = await db.getRoomTranscriptSegments(input.roomId, input.afterSequence);
+        const segments = await db.getRoomTranscriptSegments(
+          input.roomId,
+          input.afterSequence,
+        );
         return { segments };
       }),
-    
+
     // Get the latest sequence number (for checking if there are updates)
     getLatestSequence: protectedProcedure
       .input(z.object({ roomId: z.number() }))
@@ -562,17 +702,25 @@ Respond with a JSON object containing:
   // POI management
   poi: router({
     offer: protectedProcedure
-      .input(z.object({
-        roomId: z.number(),
-        speechId: z.number(),
-        timestamp: z.number(),
-      }))
+      .input(
+        z.object({
+          roomId: z.number(),
+          speechId: z.number(),
+          timestamp: z.number(),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
-        const participant = await db.getParticipantWithUser(input.roomId, ctx.user.id);
+        const participant = await db.getParticipantWithUser(
+          input.roomId,
+          ctx.user.id,
+        );
         if (!participant) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "You are not in this room" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "You are not in this room",
+          });
         }
-        
+
         const poiId = await db.createPOI({
           roomId: input.roomId,
           speechId: input.speechId,
@@ -580,16 +728,18 @@ Respond with a JSON object containing:
           timestamp: input.timestamp,
           accepted: false,
         });
-        
+
         return { poiId };
       }),
-    
+
     respond: protectedProcedure
-      .input(z.object({
-        poiId: z.number(),
-        accepted: z.boolean(),
-        content: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          poiId: z.number(),
+          accepted: z.boolean(),
+          content: z.string().optional(),
+        }),
+      )
       .mutation(async ({ input }) => {
         await db.updatePOI(input.poiId, {
           accepted: input.accepted,
@@ -606,17 +756,22 @@ Respond with a JSON object containing:
       .mutation(async ({ input }) => {
         const speeches = await db.getRoomSpeeches(input.roomId);
         const room = await db.getDebateRoomById(input.roomId);
-        const motion = room?.motionId ? await db.getMotionById(room.motionId) : null;
-        
+        const motion = room?.motionId
+          ? await db.getMotionById(room.motionId)
+          : null;
+
         if (speeches.length === 0) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "No speeches to analyze" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No speeches to analyze",
+          });
         }
-        
+
         const transcripts = speeches
-          .filter(s => s.transcript)
-          .map(s => `[${s.speakerRole}]: ${s.transcript}`)
+          .filter((s) => s.transcript)
+          .map((s) => `[${s.speakerRole}]: ${s.transcript}`)
           .join("\n\n");
-        
+
         const response = await invokeLLM({
           messages: [
             {
@@ -633,12 +788,12 @@ For each argument or rebuttal, provide:
 - wasAnswered: Whether this point was addressed by the opposing team
 - parentContent: If this is a rebuttal, the content of the argument it responds to (null otherwise)
 
-Return a JSON object with an "arguments" array containing these nodes.`
+Return a JSON object with an "arguments" array containing these nodes.`,
             },
             {
               role: "user",
-              content: `Motion: ${motion?.motion || "Unknown"}\n\nTranscript:\n${transcripts}`
-            }
+              content: `Motion: ${motion?.motion || "Unknown"}\n\nTranscript:\n${transcripts}`,
+            },
           ],
           response_format: {
             type: "json_schema",
@@ -653,41 +808,66 @@ Return a JSON object with an "arguments" array containing these nodes.`
                     items: {
                       type: "object",
                       properties: {
-                        team: { type: "string", enum: ["government", "opposition"] },
-                        nodeType: { type: "string", enum: ["argument", "rebuttal", "extension", "summary"] },
+                        team: {
+                          type: "string",
+                          enum: ["government", "opposition"],
+                        },
+                        nodeType: {
+                          type: "string",
+                          enum: [
+                            "argument",
+                            "rebuttal",
+                            "extension",
+                            "summary",
+                          ],
+                        },
                         content: { type: "string" },
                         transcriptSegment: { type: "string" },
                         qualityScore: { type: "integer" },
                         qualityExplanation: { type: "string" },
                         wasAnswered: { type: "boolean" },
-                        parentContent: { type: ["string", "null"] }
+                        parentContent: { type: ["string", "null"] },
                       },
-                      required: ["team", "nodeType", "content", "transcriptSegment", "qualityScore", "qualityExplanation", "wasAnswered", "parentContent"],
-                      additionalProperties: false
-                    }
-                  }
+                      required: [
+                        "team",
+                        "nodeType",
+                        "content",
+                        "transcriptSegment",
+                        "qualityScore",
+                        "qualityExplanation",
+                        "wasAnswered",
+                        "parentContent",
+                      ],
+                      additionalProperties: false,
+                    },
+                  },
                 },
                 required: ["arguments"],
-                additionalProperties: false
-              }
-            }
-          }
+                additionalProperties: false,
+              },
+            },
+          },
         });
-        
+
         const content = response.choices[0]?.message?.content;
-        if (!content || typeof content !== 'string') {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to analyze debate" });
+        if (!content || typeof content !== "string") {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to analyze debate",
+          });
         }
-        
+
         const analysisData = JSON.parse(content);
-        
+
         // Store argument nodes
         const nodeIds: number[] = [];
         const nodeMap = new Map<string, number>();
-        
+
         for (const arg of analysisData.arguments) {
-          const parentId = arg.parentContent ? nodeMap.get(arg.parentContent) : null;
-          
+          const parentId = arg.parentContent
+            ? nodeMap.get(arg.parentContent)
+            : null;
+
           const nodeId = await db.createArgumentNode({
             roomId: input.roomId,
             team: arg.team,
@@ -699,14 +879,14 @@ Return a JSON object with an "arguments" array containing these nodes.`
             wasAnswered: arg.wasAnswered,
             parentId: parentId || undefined,
           });
-          
+
           nodeIds.push(nodeId);
           nodeMap.set(arg.content, nodeId);
         }
-        
+
         return { success: true, nodeCount: nodeIds.length };
       }),
-    
+
     getArgumentNodes: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .query(async ({ input }) => {
@@ -721,15 +901,17 @@ Return a JSON object with an "arguments" array containing these nodes.`
       .mutation(async ({ input }) => {
         const speeches = await db.getRoomSpeeches(input.roomId);
         const room = await db.getDebateRoomById(input.roomId);
-        const motion = room?.motionId ? await db.getMotionById(room.motionId) : null;
+        const motion = room?.motionId
+          ? await db.getMotionById(room.motionId)
+          : null;
         const participants = await db.getRoomParticipants(input.roomId);
         const argumentNodes = await db.getRoomArgumentNodes(input.roomId);
-        
+
         const transcripts = speeches
-          .filter(s => s.transcript)
-          .map(s => `[${s.speakerRole}]: ${s.transcript}`)
+          .filter((s) => s.transcript)
+          .map((s) => `[${s.speakerRole}]: ${s.transcript}`)
           .join("\n\n");
-        
+
         const response = await invokeLLM({
           messages: [
             {
@@ -750,12 +932,12 @@ Return a JSON object with:
 - suggestedWinner: "government" or "opposition"
 - winningReason: Why this team won
 - teamFeedback: Array with feedback for each team
-- individualFeedback: Array with feedback for each speaker role`
+- individualFeedback: Array with feedback for each speaker role`,
             },
             {
               role: "user",
-              content: `Motion: ${motion?.motion || "Unknown"}\n\nTranscript:\n${transcripts}\n\nArgument Analysis:\n${JSON.stringify(argumentNodes.slice(0, 20))}`
-            }
+              content: `Motion: ${motion?.motion || "Unknown"}\n\nTranscript:\n${transcripts}\n\nArgument Analysis:\n${JSON.stringify(argumentNodes.slice(0, 20))}`,
+            },
           ],
           response_format: {
             type: "json_schema",
@@ -766,21 +948,41 @@ Return a JSON object with:
                 type: "object",
                 properties: {
                   overallAnalysis: { type: "string" },
-                  suggestedWinner: { type: "string", enum: ["government", "opposition"] },
+                  suggestedWinner: {
+                    type: "string",
+                    enum: ["government", "opposition"],
+                  },
                   winningReason: { type: "string" },
                   teamFeedback: {
                     type: "array",
                     items: {
                       type: "object",
                       properties: {
-                        team: { type: "string", enum: ["government", "opposition"] },
-                        strongestArguments: { type: "array", items: { type: "string" } },
-                        missedResponses: { type: "array", items: { type: "string" } },
-                        improvements: { type: "array", items: { type: "string" } }
+                        team: {
+                          type: "string",
+                          enum: ["government", "opposition"],
+                        },
+                        strongestArguments: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        missedResponses: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        improvements: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
                       },
-                      required: ["team", "strongestArguments", "missedResponses", "improvements"],
-                      additionalProperties: false
-                    }
+                      required: [
+                        "team",
+                        "strongestArguments",
+                        "missedResponses",
+                        "improvements",
+                      ],
+                      additionalProperties: false,
+                    },
                   },
                   individualFeedback: {
                     type: "array",
@@ -788,29 +990,52 @@ Return a JSON object with:
                       type: "object",
                       properties: {
                         speakerRole: { type: "string" },
-                        strongestArguments: { type: "array", items: { type: "string" } },
-                        missedResponses: { type: "array", items: { type: "string" } },
-                        improvements: { type: "array", items: { type: "string" } }
+                        strongestArguments: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        missedResponses: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        improvements: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
                       },
-                      required: ["speakerRole", "strongestArguments", "missedResponses", "improvements"],
-                      additionalProperties: false
-                    }
-                  }
+                      required: [
+                        "speakerRole",
+                        "strongestArguments",
+                        "missedResponses",
+                        "improvements",
+                      ],
+                      additionalProperties: false,
+                    },
+                  },
                 },
-                required: ["overallAnalysis", "suggestedWinner", "winningReason", "teamFeedback", "individualFeedback"],
-                additionalProperties: false
-              }
-            }
-          }
+                required: [
+                  "overallAnalysis",
+                  "suggestedWinner",
+                  "winningReason",
+                  "teamFeedback",
+                  "individualFeedback",
+                ],
+                additionalProperties: false,
+              },
+            },
+          },
         });
-        
+
         const content = response.choices[0]?.message?.content;
-        if (!content || typeof content !== 'string') {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate feedback" });
+        if (!content || typeof content !== "string") {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate feedback",
+          });
         }
-        
+
         const feedbackData = JSON.parse(content);
-        
+
         // Store overall feedback
         await db.createFeedback({
           roomId: input.roomId,
@@ -819,7 +1044,7 @@ Return a JSON object with:
           suggestedWinner: feedbackData.suggestedWinner,
           winningReason: feedbackData.winningReason,
         });
-        
+
         // Store team feedback
         for (const teamFb of feedbackData.teamFeedback) {
           await db.createFeedback({
@@ -831,10 +1056,12 @@ Return a JSON object with:
             improvements: teamFb.improvements,
           });
         }
-        
+
         // Store individual feedback
         for (const indFb of feedbackData.individualFeedback) {
-          const participant = participants.find(p => p.speakerRole === indFb.speakerRole);
+          const participant = participants.find(
+            (p) => p.speakerRole === indFb.speakerRole,
+          );
           if (participant) {
             await db.createFeedback({
               roomId: input.roomId,
@@ -846,18 +1073,18 @@ Return a JSON object with:
             });
           }
         }
-        
+
         // Update room phase
         await db.updateDebateRoom(input.roomId, { currentPhase: "completed" });
-        
+
         // Increment debate count for all participants
         for (const p of participants) {
           await db.incrementUserDebates(p.userId);
         }
-        
+
         return feedbackData;
       }),
-    
+
     get: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .query(async ({ input }) => {
@@ -868,19 +1095,32 @@ Return a JSON object with:
   // Rule violations
   violation: router({
     report: protectedProcedure
-      .input(z.object({
-        roomId: z.number(),
-        speechId: z.number().optional(),
-        violationType: z.enum(["time_exceeded", "new_argument_in_reply", "poi_outside_window", "speaking_out_of_turn"]),
-        description: z.string().optional(),
-        timestamp: z.number().optional(),
-      }))
+      .input(
+        z.object({
+          roomId: z.number(),
+          speechId: z.number().optional(),
+          violationType: z.enum([
+            "time_exceeded",
+            "new_argument_in_reply",
+            "poi_outside_window",
+            "speaking_out_of_turn",
+          ]),
+          description: z.string().optional(),
+          timestamp: z.number().optional(),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
-        const participant = await db.getParticipantWithUser(input.roomId, ctx.user.id);
+        const participant = await db.getParticipantWithUser(
+          input.roomId,
+          ctx.user.id,
+        );
         if (!participant) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "You are not in this room" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "You are not in this room",
+          });
         }
-        
+
         await db.createRuleViolation({
           roomId: input.roomId,
           speechId: input.speechId,
@@ -889,10 +1129,10 @@ Return a JSON object with:
           description: input.description,
           timestamp: input.timestamp,
         });
-        
+
         return { success: true };
       }),
-    
+
     getAll: protectedProcedure
       .input(z.object({ roomId: z.number() }))
       .query(async ({ input }) => {

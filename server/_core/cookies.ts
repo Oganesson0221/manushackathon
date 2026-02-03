@@ -18,31 +18,36 @@ function isSecureRequest(req: Request) {
     ? forwardedProto
     : forwardedProto.split(",");
 
-  return protoList.some(proto => proto.trim().toLowerCase() === "https");
+  return protoList.some((proto) => proto.trim().toLowerCase() === "https");
+}
+
+function isLocalhost(req: Request) {
+  const hostname = req.hostname || req.headers.host?.split(":")[0] || "";
+  return LOCAL_HOSTS.has(hostname);
 }
 
 export function getSessionCookieOptions(
-  req: Request
+  req: Request,
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
+  const isSecure = isSecureRequest(req);
+  const isLocal = isLocalhost(req);
 
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
+  // For localhost development: use sameSite: "lax" and secure: false
+  // This allows cookies to work on HTTP localhost
+  if (isLocal && !isSecure) {
+    return {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure: false,
+    };
+  }
 
+  // For production: use sameSite: "none" with secure: true
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
-    secure: isSecureRequest(req),
+    secure: true,
   };
 }

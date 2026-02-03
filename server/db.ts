@@ -1,18 +1,29 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
-  debateRooms, InsertDebateRoom, DebateRoom,
-  debateParticipants, InsertDebateParticipant,
-  debateMotions, InsertDebateMotion,
-  debateSpeeches, InsertDebateSpeech,
-  pointsOfInformation, InsertPointOfInformation,
-  argumentNodes, InsertArgumentNode,
-  debateFeedback, InsertDebateFeedback,
-  ruleViolations, InsertRuleViolation,
-  transcriptSegments, InsertTranscriptSegment
+import {
+  InsertUser,
+  users,
+  debateRooms,
+  InsertDebateRoom,
+  DebateRoom,
+  debateParticipants,
+  InsertDebateParticipant,
+  debateMotions,
+  InsertDebateMotion,
+  debateSpeeches,
+  InsertDebateSpeech,
+  pointsOfInformation,
+  InsertPointOfInformation,
+  argumentNodes,
+  InsertArgumentNode,
+  debateFeedback,
+  InsertDebateFeedback,
+  ruleViolations,
+  InsertRuleViolation,
+  transcriptSegments,
+  InsertTranscriptSegment,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -68,8 +79,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -96,7 +107,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -107,21 +122,25 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUserProfile(userId: number, profile: {
-  bio?: string;
-  experienceLevel?: "novice" | "intermediate" | "advanced" | "expert";
-  topicalInterests?: string[];
-  background?: string;
-  name?: string;
-}) {
+export async function updateUserProfile(
+  userId: number,
+  profile: {
+    bio?: string;
+    experienceLevel?: "novice" | "intermediate" | "advanced" | "expert";
+    topicalInterests?: string[];
+    background?: string;
+    name?: string;
+  },
+) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(users)
-    .set({ 
-      ...profile, 
+
+  await db
+    .update(users)
+    .set({
+      ...profile,
       profileCompleted: true,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     })
     .where(eq(users.id, userId));
 }
@@ -129,8 +148,9 @@ export async function updateUserProfile(userId: number, profile: {
 export async function incrementUserDebates(userId: number) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(users)
+
+  await db
+    .update(users)
     .set({ debatesCompleted: sql`${users.debatesCompleted} + 1` })
     .where(eq(users.id, userId));
 }
@@ -140,39 +160,56 @@ export async function incrementUserDebates(userId: number) {
 export async function createDebateRoom(room: InsertDebateRoom) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(debateRooms).values(room);
-  return result[0].insertId;
+  // mysql2 returns [ResultSetHeader, undefined] - insertId is on the first element
+  const insertId = (result as any)[0]?.insertId ?? (result as any).insertId;
+  if (!insertId) {
+    throw new Error("Failed to get insertId from database");
+  }
+  return insertId;
 }
 
 export async function getDebateRoomByCode(roomCode: string) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select().from(debateRooms).where(eq(debateRooms.roomCode, roomCode)).limit(1);
+
+  const result = await db
+    .select()
+    .from(debateRooms)
+    .where(eq(debateRooms.roomCode, roomCode))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getDebateRoomById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select().from(debateRooms).where(eq(debateRooms.id, id)).limit(1);
+
+  const result = await db
+    .select()
+    .from(debateRooms)
+    .where(eq(debateRooms.id, id))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateDebateRoom(roomId: number, updates: Partial<DebateRoom>) {
+export async function updateDebateRoom(
+  roomId: number,
+  updates: Partial<DebateRoom>,
+) {
   const db = await getDb();
   if (!db) return;
-  
+
   await db.update(debateRooms).set(updates).where(eq(debateRooms.id, roomId));
 }
 
 export async function getActiveRooms() {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(debateRooms)
     .where(eq(debateRooms.status, "waiting"))
     .orderBy(desc(debateRooms.createdAt))
@@ -182,19 +219,26 @@ export async function getActiveRooms() {
 export async function getUserDebateHistory(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  const participations = await db.select()
+
+  const participations = await db
+    .select()
     .from(debateParticipants)
     .where(eq(debateParticipants.userId, userId));
-  
+
   if (participations.length === 0) return [];
-  
-  const roomIds = participations.map(p => p.roomId);
-  const rooms = await db.select()
+
+  const roomIds = participations.map((p) => p.roomId);
+  const rooms = await db
+    .select()
     .from(debateRooms)
-    .where(sql`${debateRooms.id} IN (${sql.join(roomIds.map(id => sql`${id}`), sql`, `)})`)
+    .where(
+      sql`${debateRooms.id} IN (${sql.join(
+        roomIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})`,
+    )
     .orderBy(desc(debateRooms.createdAt));
-  
+
   return rooms;
 }
 
@@ -203,7 +247,7 @@ export async function getUserDebateHistory(userId: number) {
 export async function addParticipant(participant: InsertDebateParticipant) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(debateParticipants).values(participant);
   return result[0].insertId;
 }
@@ -211,8 +255,9 @@ export async function addParticipant(participant: InsertDebateParticipant) {
 export async function getRoomParticipants(roomId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(debateParticipants)
     .where(eq(debateParticipants.roomId, roomId));
 }
@@ -220,23 +265,30 @@ export async function getRoomParticipants(roomId: number) {
 export async function getParticipantWithUser(roomId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select()
+
+  const result = await db
+    .select()
     .from(debateParticipants)
-    .where(and(
-      eq(debateParticipants.roomId, roomId),
-      eq(debateParticipants.userId, userId)
-    ))
+    .where(
+      and(
+        eq(debateParticipants.roomId, roomId),
+        eq(debateParticipants.userId, userId),
+      ),
+    )
     .limit(1);
-  
+
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateParticipantReady(participantId: number, isReady: boolean) {
+export async function updateParticipantReady(
+  participantId: number,
+  isReady: boolean,
+) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(debateParticipants)
+
+  await db
+    .update(debateParticipants)
     .set({ isReady })
     .where(eq(debateParticipants.id, participantId));
 }
@@ -244,12 +296,15 @@ export async function updateParticipantReady(participantId: number, isReady: boo
 export async function removeParticipant(roomId: number, userId: number) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.delete(debateParticipants)
-    .where(and(
-      eq(debateParticipants.roomId, roomId),
-      eq(debateParticipants.userId, userId)
-    ));
+
+  await db
+    .delete(debateParticipants)
+    .where(
+      and(
+        eq(debateParticipants.roomId, roomId),
+        eq(debateParticipants.userId, userId),
+      ),
+    );
 }
 
 // ============ MOTION OPERATIONS ============
@@ -257,7 +312,7 @@ export async function removeParticipant(roomId: number, userId: number) {
 export async function createMotion(motion: InsertDebateMotion) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(debateMotions).values(motion);
   return result[0].insertId;
 }
@@ -265,16 +320,21 @@ export async function createMotion(motion: InsertDebateMotion) {
 export async function getMotionById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select().from(debateMotions).where(eq(debateMotions.id, id)).limit(1);
+
+  const result = await db
+    .select()
+    .from(debateMotions)
+    .where(eq(debateMotions.id, id))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getMotionsByTopic(topicArea: string) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(debateMotions)
     .where(eq(debateMotions.topicArea, topicArea as any))
     .orderBy(desc(debateMotions.createdAt))
@@ -286,23 +346,30 @@ export async function getMotionsByTopic(topicArea: string) {
 export async function createSpeech(speech: InsertDebateSpeech) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(debateSpeeches).values(speech);
   return result[0].insertId;
 }
 
-export async function updateSpeech(speechId: number, updates: Partial<InsertDebateSpeech>) {
+export async function updateSpeech(
+  speechId: number,
+  updates: Partial<InsertDebateSpeech>,
+) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(debateSpeeches).set(updates).where(eq(debateSpeeches.id, speechId));
+
+  await db
+    .update(debateSpeeches)
+    .set(updates)
+    .where(eq(debateSpeeches.id, speechId));
 }
 
 export async function getRoomSpeeches(roomId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(debateSpeeches)
     .where(eq(debateSpeeches.roomId, roomId))
     .orderBy(debateSpeeches.startedAt);
@@ -311,8 +378,12 @@ export async function getRoomSpeeches(roomId: number) {
 export async function getSpeechById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select().from(debateSpeeches).where(eq(debateSpeeches.id, id)).limit(1);
+
+  const result = await db
+    .select()
+    .from(debateSpeeches)
+    .where(eq(debateSpeeches.id, id))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -321,23 +392,30 @@ export async function getSpeechById(id: number) {
 export async function createPOI(poi: InsertPointOfInformation) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(pointsOfInformation).values(poi);
   return result[0].insertId;
 }
 
-export async function updatePOI(poiId: number, updates: Partial<InsertPointOfInformation>) {
+export async function updatePOI(
+  poiId: number,
+  updates: Partial<InsertPointOfInformation>,
+) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(pointsOfInformation).set(updates).where(eq(pointsOfInformation.id, poiId));
+
+  await db
+    .update(pointsOfInformation)
+    .set(updates)
+    .where(eq(pointsOfInformation.id, poiId));
 }
 
 export async function getSpeechPOIs(speechId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(pointsOfInformation)
     .where(eq(pointsOfInformation.speechId, speechId));
 }
@@ -347,7 +425,7 @@ export async function getSpeechPOIs(speechId: number) {
 export async function createArgumentNode(node: InsertArgumentNode) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(argumentNodes).values(node);
   return result[0].insertId;
 }
@@ -355,18 +433,25 @@ export async function createArgumentNode(node: InsertArgumentNode) {
 export async function getRoomArgumentNodes(roomId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(argumentNodes)
     .where(eq(argumentNodes.roomId, roomId))
     .orderBy(argumentNodes.createdAt);
 }
 
-export async function updateArgumentNode(nodeId: number, updates: Partial<InsertArgumentNode>) {
+export async function updateArgumentNode(
+  nodeId: number,
+  updates: Partial<InsertArgumentNode>,
+) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.update(argumentNodes).set(updates).where(eq(argumentNodes.id, nodeId));
+
+  await db
+    .update(argumentNodes)
+    .set(updates)
+    .where(eq(argumentNodes.id, nodeId));
 }
 
 // ============ FEEDBACK OPERATIONS ============
@@ -374,7 +459,7 @@ export async function updateArgumentNode(nodeId: number, updates: Partial<Insert
 export async function createFeedback(feedback: InsertDebateFeedback) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(debateFeedback).values(feedback);
   return result[0].insertId;
 }
@@ -382,24 +467,31 @@ export async function createFeedback(feedback: InsertDebateFeedback) {
 export async function getRoomFeedback(roomId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(debateFeedback)
     .where(eq(debateFeedback.roomId, roomId));
 }
 
-export async function getParticipantFeedback(roomId: number, participantId: number) {
+export async function getParticipantFeedback(
+  roomId: number,
+  participantId: number,
+) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db.select()
+
+  const result = await db
+    .select()
     .from(debateFeedback)
-    .where(and(
-      eq(debateFeedback.roomId, roomId),
-      eq(debateFeedback.participantId, participantId)
-    ))
+    .where(
+      and(
+        eq(debateFeedback.roomId, roomId),
+        eq(debateFeedback.participantId, participantId),
+      ),
+    )
     .limit(1);
-  
+
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -408,7 +500,7 @@ export async function getParticipantFeedback(roomId: number, participantId: numb
 export async function createRuleViolation(violation: InsertRuleViolation) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(ruleViolations).values(violation);
   return result[0].insertId;
 }
@@ -416,8 +508,9 @@ export async function createRuleViolation(violation: InsertRuleViolation) {
 export async function getRoomViolations(roomId: number) {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(ruleViolations)
     .where(eq(ruleViolations.roomId, roomId))
     .orderBy(ruleViolations.createdAt);
@@ -425,49 +518,64 @@ export async function getRoomViolations(roomId: number) {
 
 // ============ TRANSCRIPT SEGMENT OPERATIONS ============
 
-export async function createTranscriptSegment(segment: InsertTranscriptSegment) {
+export async function createTranscriptSegment(
+  segment: InsertTranscriptSegment,
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const result = await db.insert(transcriptSegments).values(segment);
   return result[0].insertId;
 }
 
-export async function getRoomTranscriptSegments(roomId: number, afterSequence?: number) {
+export async function getRoomTranscriptSegments(
+  roomId: number,
+  afterSequence?: number,
+) {
   const db = await getDb();
   if (!db) return [];
-  
+
   if (afterSequence !== undefined) {
-    return await db.select()
+    return await db
+      .select()
       .from(transcriptSegments)
-      .where(and(
-        eq(transcriptSegments.roomId, roomId),
-        sql`${transcriptSegments.sequenceNumber} > ${afterSequence}`
-      ))
+      .where(
+        and(
+          eq(transcriptSegments.roomId, roomId),
+          sql`${transcriptSegments.sequenceNumber} > ${afterSequence}`,
+        ),
+      )
       .orderBy(transcriptSegments.sequenceNumber);
   }
-  
-  return await db.select()
+
+  return await db
+    .select()
     .from(transcriptSegments)
     .where(eq(transcriptSegments.roomId, roomId))
     .orderBy(transcriptSegments.sequenceNumber);
 }
 
-export async function getLatestTranscriptSequence(roomId: number): Promise<number> {
+export async function getLatestTranscriptSequence(
+  roomId: number,
+): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  
-  const result = await db.select({ maxSeq: sql<number>`COALESCE(MAX(${transcriptSegments.sequenceNumber}), 0)` })
+
+  const result = await db
+    .select({
+      maxSeq: sql<number>`COALESCE(MAX(${transcriptSegments.sequenceNumber}), 0)`,
+    })
     .from(transcriptSegments)
     .where(eq(transcriptSegments.roomId, roomId));
-  
+
   return result[0]?.maxSeq || 0;
 }
 
 export async function deleteRoomTranscriptSegments(roomId: number) {
   const db = await getDb();
   if (!db) return;
-  
-  await db.delete(transcriptSegments)
+
+  await db
+    .delete(transcriptSegments)
     .where(eq(transcriptSegments.roomId, roomId));
 }

@@ -1,11 +1,25 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
-import { ArrowRight, Mic, Brain, Users, Clock, BarChart3, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Mic,
+  Brain,
+  Users,
+  Clock,
+  BarChart3,
+  Zap,
+} from "lucide-react";
 import { Link } from "wouter";
 
+// Check if we're in local auth mode (no login required)
+const isLocalAuthMode = import.meta.env.VITE_AUTH_MODE === "local";
+
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
+
+  // In local mode, always show authenticated view
+  const showAuthenticatedView = isLocalAuthMode || isAuthenticated;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -18,9 +32,12 @@ export default function Home() {
             </span>
           </Link>
           <div className="flex items-center gap-6">
-            {isAuthenticated ? (
+            {showAuthenticatedView ? (
               <>
-                <Link href="/lobby" className="no-underline hover:bg-transparent">
+                <Link
+                  href="/lobby"
+                  className="no-underline hover:bg-transparent"
+                >
                   <span className="font-bold uppercase tracking-wider hover:underline decoration-4 underline-offset-4">
                     Lobby
                   </span>
@@ -54,32 +71,43 @@ export default function Home() {
                   AI-Powered Training
                 </p>
                 <h1 className="text-massive leading-none">
-                  DEBATE<br />
+                  DEBATE
+                  <br />
                   <span className="brutalist-underline">SMARTER</span>
                 </h1>
               </div>
               <p className="text-xl md:text-2xl font-medium max-w-lg leading-relaxed">
-                Real-time transcription. Argument analysis. 
-                AI coaching. Scale your debate practice without limits.
+                Real-time transcription. Argument analysis. AI coaching. Scale
+                your debate practice without limits.
               </p>
               <div className="flex flex-wrap gap-4">
-                {isAuthenticated ? (
+                {showAuthenticatedView ? (
                   <Link href="/room/create">
-                    <Button size="lg" className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-8 py-6 h-auto text-lg">
+                    <Button
+                      size="lg"
+                      className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-8 py-6 h-auto text-lg"
+                    >
                       Create Room
                       <ArrowRight className="ml-3 h-6 w-6" />
                     </Button>
                   </Link>
                 ) : (
                   <a href={getLoginUrl()}>
-                    <Button size="lg" className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-8 py-6 h-auto text-lg">
+                    <Button
+                      size="lg"
+                      className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-8 py-6 h-auto text-lg"
+                    >
                       Get Started
                       <ArrowRight className="ml-3 h-6 w-6" />
                     </Button>
                   </a>
                 )}
                 <Link href="/lobby">
-                  <Button variant="outline" size="lg" className="brutalist-border bg-transparent uppercase font-black tracking-wider px-8 py-6 h-auto text-lg hover:bg-foreground hover:text-background transition-colors">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="brutalist-border bg-transparent uppercase font-black tracking-wider px-8 py-6 h-auto text-lg hover:bg-foreground hover:text-background transition-colors"
+                  >
                     Join Room
                   </Button>
                 </Link>
@@ -90,11 +118,15 @@ export default function Home() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-4 h-4 bg-foreground"></div>
-                    <span className="font-bold uppercase tracking-wider">Asian Parliamentary Format</span>
+                    <span className="font-bold uppercase tracking-wider">
+                      Asian Parliamentary Format
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4">
                     <div className="brutalist-border p-4 team-gov">
-                      <p className="font-black uppercase text-sm mb-2">Government</p>
+                      <p className="font-black uppercase text-sm mb-2">
+                        Government
+                      </p>
                       <div className="space-y-1 text-sm">
                         <p>• Prime Minister</p>
                         <p>• Deputy PM</p>
@@ -102,7 +134,9 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="brutalist-border p-4 team-opp">
-                      <p className="font-black uppercase text-sm mb-2">Opposition</p>
+                      <p className="font-black uppercase text-sm mb-2">
+                        Opposition
+                      </p>
                       <div className="space-y-1 text-sm">
                         <p>• Leader of Opp.</p>
                         <p>• Deputy LO</p>
@@ -112,7 +146,9 @@ export default function Home() {
                   </div>
                   <div className="pt-4 border-t-4 border-foreground">
                     <p className="text-6xl font-black">6</p>
-                    <p className="font-bold uppercase tracking-wider text-muted-foreground">Debaters per Room</p>
+                    <p className="font-bold uppercase tracking-wider text-muted-foreground">
+                      Debaters per Room
+                    </p>
                   </div>
                 </div>
               </div>
@@ -128,44 +164,48 @@ export default function Home() {
             <p className="text-lg font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Platform Features
             </p>
-            <h2 className="text-display">
-              EVERYTHING YOU NEED
-            </h2>
+            <h2 className="text-display">EVERYTHING YOU NEED</h2>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               {
                 icon: Mic,
                 title: "Live Transcription",
-                description: "Real-time speech-to-text with speaker identification and timestamp segmentation."
+                description:
+                  "Real-time speech-to-text with speaker identification and timestamp segmentation.",
               },
               {
                 icon: Brain,
                 title: "AI Analysis",
-                description: "Automatic argument extraction, clash detection, and quality scoring."
+                description:
+                  "Automatic argument extraction, clash detection, and quality scoring.",
               },
               {
                 icon: Users,
                 title: "Team Rooms",
-                description: "Support for 2 teams of 3 debaters with role-based speaker order."
+                description:
+                  "Support for 2 teams of 3 debaters with role-based speaker order.",
               },
               {
                 icon: Clock,
                 title: "Auto Timekeeping",
-                description: "Enforced speech times, protected periods, and POI management."
+                description:
+                  "Enforced speech times, protected periods, and POI management.",
               },
               {
                 icon: BarChart3,
                 title: "Progress Tracking",
-                description: "Track responsiveness, rebuttal quality, and improvement over time."
+                description:
+                  "Track responsiveness, rebuttal quality, and improvement over time.",
               },
               {
                 icon: Zap,
                 title: "Instant Feedback",
-                description: "AI-generated post-debate analysis with actionable suggestions."
-              }
+                description:
+                  "AI-generated post-debate analysis with actionable suggestions.",
+              },
             ].map((feature, index) => (
-              <div 
+              <div
                 key={index}
                 className="border-4 border-background p-8 hover:bg-background hover:text-foreground transition-colors group"
               >
@@ -189,16 +229,30 @@ export default function Home() {
             <p className="text-lg font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Simple Process
             </p>
-            <h2 className="text-display">
-              HOW IT WORKS
-            </h2>
+            <h2 className="text-display">HOW IT WORKS</h2>
           </div>
           <div className="grid md:grid-cols-4 gap-8">
             {[
-              { step: "01", title: "Create Room", desc: "Generate a debate room with AI motion" },
-              { step: "02", title: "Join Teams", desc: "Debaters join as Gov or Opposition" },
-              { step: "03", title: "Debate Live", desc: "Speak while AI transcribes in real-time" },
-              { step: "04", title: "Get Feedback", desc: "Review argument map and AI analysis" }
+              {
+                step: "01",
+                title: "Create Room",
+                desc: "Generate a debate room with AI motion",
+              },
+              {
+                step: "02",
+                title: "Join Teams",
+                desc: "Debaters join as Gov or Opposition",
+              },
+              {
+                step: "03",
+                title: "Debate Live",
+                desc: "Speak while AI transcribes in real-time",
+              },
+              {
+                step: "04",
+                title: "Get Feedback",
+                desc: "Review argument map and AI analysis",
+              },
             ].map((item, index) => (
               <div key={index} className="relative">
                 <div className="brutalist-border brutalist-shadow p-6">
@@ -208,9 +262,7 @@ export default function Home() {
                   <h3 className="text-xl font-black uppercase mt-4 mb-2">
                     {item.title}
                   </h3>
-                  <p className="text-muted-foreground">
-                    {item.desc}
-                  </p>
+                  <p className="text-muted-foreground">{item.desc}</p>
                 </div>
                 {index < 3 && (
                   <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2">
@@ -231,7 +283,7 @@ export default function Home() {
               { value: "7", label: "Min Speech Time" },
               { value: "8", label: "Speakers Total" },
               { value: "∞", label: "AI Analysis" },
-              { value: "0", label: "Setup Required" }
+              { value: "0", label: "Setup Required" },
             ].map((stat, index) => (
               <div key={index}>
                 <p className="text-6xl md:text-8xl font-black">{stat.value}</p>
@@ -249,22 +301,30 @@ export default function Home() {
         <div className="container">
           <div className="brutalist-border-thick brutalist-shadow-lg p-12 md:p-20 text-center">
             <h2 className="text-display mb-8">
-              READY TO<br />
+              READY TO
+              <br />
               <span className="brutalist-underline">LEVEL UP?</span>
             </h2>
             <p className="text-xl md:text-2xl max-w-2xl mx-auto mb-12 text-muted-foreground">
-              Join debaters worldwide using AI to sharpen their argumentation skills.
+              Join debaters worldwide using AI to sharpen their argumentation
+              skills.
             </p>
             {isAuthenticated ? (
               <Link href="/room/create">
-                <Button size="lg" className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-12 py-8 h-auto text-xl">
+                <Button
+                  size="lg"
+                  className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-12 py-8 h-auto text-xl"
+                >
                   Create Your First Room
                   <ArrowRight className="ml-4 h-8 w-8" />
                 </Button>
               </Link>
             ) : (
               <a href={getLoginUrl()}>
-                <Button size="lg" className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-12 py-8 h-auto text-xl">
+                <Button
+                  size="lg"
+                  className="brutalist-border brutalist-shadow-lg brutalist-shadow-hover transition-all uppercase font-black tracking-wider px-12 py-8 h-auto text-xl"
+                >
                   Start Free
                   <ArrowRight className="ml-4 h-8 w-8" />
                 </Button>
@@ -287,10 +347,16 @@ export default function Home() {
               </span>
             </div>
             <div className="flex items-center gap-8">
-              <Link href="/lobby" className="font-bold uppercase tracking-wider text-sm hover:underline decoration-2 underline-offset-4 no-underline hover:bg-transparent">
+              <Link
+                href="/lobby"
+                className="font-bold uppercase tracking-wider text-sm hover:underline decoration-2 underline-offset-4 no-underline hover:bg-transparent"
+              >
                 Lobby
               </Link>
-              <Link href="/profile" className="font-bold uppercase tracking-wider text-sm hover:underline decoration-2 underline-offset-4 no-underline hover:bg-transparent">
+              <Link
+                href="/profile"
+                className="font-bold uppercase tracking-wider text-sm hover:underline decoration-2 underline-offset-4 no-underline hover:bg-transparent"
+              >
                 Profile
               </Link>
             </div>

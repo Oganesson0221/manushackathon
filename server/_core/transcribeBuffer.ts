@@ -1,6 +1,10 @@
 /**
  * Direct buffer transcription helper - bypasses S3 URL issues
  * Sends audio buffer directly to Whisper API
+ *
+ * Supports multiple providers:
+ * - Groq (FREE): Uses Whisper Large V3 - https://console.groq.com
+ * - Forge API: Internal service
  */
 import { ENV } from "./env";
 
@@ -34,43 +38,77 @@ export type WhisperResponse = {
 
 export type TranscriptionError = {
   error: string;
-  code: "FILE_TOO_LARGE" | "INVALID_FORMAT" | "TRANSCRIPTION_FAILED" | "SERVICE_ERROR";
+  code:
+    | "FILE_TOO_LARGE"
+    | "INVALID_FORMAT"
+    | "TRANSCRIPTION_FAILED"
+    | "SERVICE_ERROR";
   details?: string;
 };
+
+// Transcription provider configuration
+type TranscriptionProvider = {
+  name: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+};
+
+function getTranscriptionProvider(): TranscriptionProvider | null {
+  // Groq - FREE Whisper API (https://console.groq.com)
+  if (ENV.groqApiKey) {
+    console.log("[TranscribeBuffer] Using Groq Whisper Large V3 (FREE)");
+    return {
+      name: "groq",
+      baseUrl: "https://api.groq.com/openai/v1/audio/transcriptions",
+      model: "whisper-large-v3", // Free, fast
+      apiKey: ENV.groqApiKey,
+    };
+  }
+
+  // Forge API (legacy)
+  if (ENV.forgeApiKey && ENV.forgeApiUrl) {
+    console.log("[TranscribeBuffer] Using Forge API");
+    return {
+      name: "forge",
+      baseUrl: `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/audio/transcriptions`,
+      model: "whisper-1",
+      apiKey: ENV.forgeApiKey,
+    };
+  }
+
+  return null;
+}
 
 /**
  * Transcribe audio buffer directly to text using Whisper API
  * This bypasses S3 URL access issues by sending the buffer directly
  */
 export async function transcribeBuffer(
-  options: TranscribeBufferOptions
+  options: TranscribeBufferOptions,
 ): Promise<WhisperResponse | TranscriptionError> {
   try {
-    // Validate environment
-    if (!ENV.forgeApiUrl) {
+    // Get provider
+    const provider = getTranscriptionProvider();
+    if (!provider) {
       return {
         error: "Transcription service not configured",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_URL is not set"
-      };
-    }
-    if (!ENV.forgeApiKey) {
-      return {
-        error: "Transcription service authentication missing",
-        code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_KEY is not set"
+        details:
+          "No transcription API key configured. Set GROQ_API_KEY for free transcription.",
       };
     }
 
-    const { audioBuffer, mimeType = 'audio/webm', language, prompt } = options;
+    const { audioBuffer, mimeType = "audio/webm", language, prompt } = options;
 
-    // Check file size (16MB limit)
+    // Check file size (16MB limit for Groq, 25MB for others)
     const sizeMB = audioBuffer.length / (1024 * 1024);
-    if (sizeMB > 16) {
+    const maxSize = provider.name === "groq" ? 25 : 16;
+    if (sizeMB > maxSize) {
       return {
         error: "Audio file exceeds maximum size limit",
         code: "FILE_TOO_LARGE",
-        details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`
+        details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is ${maxSize}MB`,
       };
     }
 
@@ -79,56 +117,58 @@ export async function transcribeBuffer(
       return {
         error: "Audio file too small",
         code: "INVALID_FORMAT",
-        details: `File size is ${audioBuffer.length} bytes, minimum is 1KB`
+        details: `File size is ${audioBuffer.length} bytes, minimum is 1KB`,
       };
     }
 
-    console.log(`[TranscribeBuffer] Processing ${audioBuffer.length} bytes of ${mimeType}`);
+    console.log(
+      `[TranscribeBuffer] Processing ${audioBuffer.length} bytes of ${mimeType} with ${provider.name}`,
+    );
 
     // Create FormData with audio buffer
     const formData = new FormData();
-    
+
     // Get file extension from mime type
     const extMap: Record<string, string> = {
-      'audio/webm': 'webm',
-      'audio/webm;codecs=opus': 'webm',
-      'audio/mp3': 'mp3',
-      'audio/mpeg': 'mp3',
-      'audio/wav': 'wav',
-      'audio/ogg': 'ogg',
-      'audio/mp4': 'm4a',
+      "audio/webm": "webm",
+      "audio/webm;codecs=opus": "webm",
+      "audio/mp3": "mp3",
+      "audio/mpeg": "mp3",
+      "audio/wav": "wav",
+      "audio/ogg": "ogg",
+      "audio/mp4": "m4a",
     };
-    const ext = extMap[mimeType] || 'webm';
+    const ext = extMap[mimeType] || "webm";
     const filename = `audio.${ext}`;
-    
+
     // Create blob from buffer
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
+      type: mimeType,
+    });
     formData.append("file", audioBlob, filename);
-    formData.append("model", "whisper-1");
+    formData.append("model", provider.model);
     formData.append("response_format", "verbose_json");
-    
+
     // Add prompt
-    const transcriptionPrompt = prompt || (
-      language 
+    const transcriptionPrompt =
+      prompt ||
+      (language
         ? `Transcribe this debate speech clearly. The speaker is using ${language}.`
-        : "Transcribe this debate speech clearly and accurately."
-    );
+        : "Transcribe this debate speech clearly and accurately.");
     formData.append("prompt", transcriptionPrompt);
 
-    // Build API URL
-    const baseUrl = ENV.forgeApiUrl.endsWith("/")
-      ? ENV.forgeApiUrl
-      : `${ENV.forgeApiUrl}/`;
-    
-    const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
+    // Add language if specified
+    if (language) {
+      formData.append("language", language);
+    }
 
-    console.log(`[TranscribeBuffer] Calling Whisper API...`);
+    console.log(`[TranscribeBuffer] Calling ${provider.name} Whisper API...`);
 
     // Call Whisper API
-    const response = await fetch(fullUrl, {
+    const response = await fetch(provider.baseUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
+        authorization: `Bearer ${provider.apiKey}`,
         "Accept-Encoding": "identity",
       },
       body: formData,
@@ -136,34 +176,37 @@ export async function transcribeBuffer(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      console.error(`[TranscribeBuffer] API error: ${response.status} ${errorText}`);
+      console.error(
+        `[TranscribeBuffer] ${provider.name} API error: ${response.status} ${errorText}`,
+      );
       return {
         error: "Transcription service request failed",
         code: "TRANSCRIPTION_FAILED",
-        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`
+        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`,
       };
     }
 
-    const result = await response.json() as WhisperResponse;
-    
+    const result = (await response.json()) as WhisperResponse;
+
     // Validate response
-    if (!result.text || typeof result.text !== 'string') {
+    if (!result.text || typeof result.text !== "string") {
       return {
         error: "Invalid transcription response",
         code: "SERVICE_ERROR",
-        details: "Whisper API returned invalid response format"
+        details: "Whisper API returned invalid response format",
       };
     }
 
-    console.log(`[TranscribeBuffer] Success! Text: "${result.text.substring(0, 100)}..."`);
+    console.log(
+      `[TranscribeBuffer] Success with ${provider.name}! Text: "${result.text.substring(0, 100)}${result.text.length > 100 ? "..." : ""}"`,
+    );
     return result;
-
   } catch (error) {
     console.error(`[TranscribeBuffer] Error:`, error);
     return {
       error: "Transcription failed",
       code: "SERVICE_ERROR",
-      details: error instanceof Error ? error.message : "Unknown error"
+      details: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
